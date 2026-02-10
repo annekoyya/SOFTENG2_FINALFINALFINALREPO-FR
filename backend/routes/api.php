@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\AttendanceController;
 
 // Payroll routes
 Route::prefix('api/payrolls')->middleware('auth')->group(function () {
@@ -38,3 +39,44 @@ Route::prefix('api/payrolls')->middleware('auth')->group(function () {
     // Delete payroll (draft only)
     Route::delete('/{payroll}', [PayrollController::class, 'destroy']);
 });
+
+// Attendance routes
+Route::prefix('api/attendance')->middleware('auth')->group(function () {
+    // Clock in/out
+    Route::post('/clock-in', [AttendanceController::class, 'clockIn']);
+    Route::post('/clock-out', [AttendanceController::class, 'clockOut']);
+    
+    // Get real-time workforce status
+    Route::get('/live-status', [AttendanceController::class, 'getLiveStatus']);
+    
+    // Get attendance records
+    Route::get('/', [AttendanceController::class, 'getAttendance']);
+    
+    // Get attendance summary
+    Route::get('/summary', [AttendanceController::class, 'getSummary']);
+    
+    // Get monthly statistics
+    Route::get('/monthly-stats', [AttendanceController::class, 'getMonthlyStats']);
+    
+    // Manually mark attendance (HR only)
+    Route::post('/mark', [AttendanceController::class, 'markAttendance']);
+    
+    // Process daily attendance
+    Route::post('/process-daily', [AttendanceController::class, 'processDailyAttendance']);
+});
+
+// Leave request routes
+Route::prefix('api/leave-requests')->middleware('auth')->group(function () {
+    // Create leave request
+    Route::post('/', [AttendanceController::class, 'createLeaveRequest']);
+    
+    // Get leave requests
+    Route::get('/', [AttendanceController::class, 'getLeaveRequests']);
+    
+    // Approve leave request
+    Route::post('/{leaveRequest}/approve', [AttendanceController::class, 'approveLeaveRequest']);
+    
+    // Reject leave request
+    Route::post('/{leaveRequest}/reject', [AttendanceController::class, 'rejectLeaveRequest']);
+});
+

@@ -133,7 +133,7 @@ export default function ArchivedEmployees() {
           </SheetHeader>
           {selectedEmployee && (
             <div className="mt-6 space-y-6">
-              <EmployeeDetails employee={selectedEmployee} />
+              {/* <EmployeeDetails employee={selectedEmployee} /> */}
 
               {/* Archived Info */}
               <div className="rounded-lg border border-warning/20 bg-warning/5 p-4">
