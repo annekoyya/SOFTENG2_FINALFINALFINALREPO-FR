@@ -17,6 +17,7 @@ interface DeleteEmployeeDialogProps {
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
   isLoading?: boolean;
+  mode?: "soft" | "hard";
 }
 
 export function DeleteEmployeeDialog({
@@ -25,19 +26,25 @@ export function DeleteEmployeeDialog({
   onOpenChange,
   onConfirm,
   isLoading,
+  mode = "soft",
 }: DeleteEmployeeDialogProps) {
   if (!employee) return null;
+
+  const title = mode === "hard" ? "Permanently Delete Employee" : "Archive Employee";
+  const description =
+    mode === "hard"
+      ? "Are you sure you want to permanently delete this employee? This action cannot be undone."
+      : "Archive this employee. They will be removed from the active directory but can be restored later.";
+  const actionLabel = mode === "hard" ? "Permanently Delete" : "Archive";
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete Employee</AlertDialogTitle>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-4">
-              <p>
-                Are you sure you want to delete this employee? This action cannot be undone.
-              </p>
+              <p>{description}</p>
               <div className="flex items-center gap-3 rounded-lg border border-destructive/20 bg-destructive/5 p-3">
                 <Avatar className="h-10 w-10">
                   <AvatarFallback className="bg-primary/10 text-primary">
@@ -63,7 +70,7 @@ export function DeleteEmployeeDialog({
             disabled={isLoading}
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
-            {isLoading ? "Deleting..." : "Delete Employee"}
+            {isLoading ? (mode === "hard" ? "Deleting..." : "Archiving...") : actionLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

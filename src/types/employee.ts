@@ -24,6 +24,8 @@ export interface Employee {
   documents?: EmployeeDocument[];
   created_at: string;
   updated_at: string;
+  archived?: boolean;
+  archived_at?: string | null;
 }
 
 export interface EmployeeDocument {

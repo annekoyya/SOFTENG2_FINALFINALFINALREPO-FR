@@ -99,15 +99,74 @@ export function useEmployees() {
 
   const deleteEmployee = useCallback(
     async (id: string) => {
+      // Soft-archive employee by default
       setIsLoading(true);
       try {
-        // Simulate API call
         await new Promise((resolve) => setTimeout(resolve, 500));
 
+        setEmployees((prev) =>
+          prev.map((emp) =>
+            emp.id === id
+              ? { ...emp, archived: true, archived_at: new Date().toISOString() }
+              : emp
+          )
+        );
+        toast({
+          title: "Employee Archived",
+          description: "Employee has been archived and can be restored.",
+        });
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to archive employee. Please try again.",
+          variant: "destructive",
+        });
+        throw error;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [toast]
+  );
+
+  const restoreEmployee = useCallback(
+    async (id: string) => {
+      setIsLoading(true);
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        setEmployees((prev) =>
+          prev.map((emp) =>
+            emp.id === id ? { ...emp, archived: false, archived_at: null } : emp
+          )
+        );
+        toast({
+          title: "Employee Restored",
+          description: "Employee has been restored to the directory.",
+        });
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to restore employee. Please try again.",
+          variant: "destructive",
+        });
+        throw error;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [toast]
+  );
+
+  const purgeEmployee = useCallback(
+    async (id: string) => {
+      // Permanently remove employee
+      setIsLoading(true);
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 500));
         setEmployees((prev) => prev.filter((emp) => emp.id !== id));
         toast({
-          title: "Employee Deleted",
-          description: "Employee has been removed from the system.",
+          title: "Employee Permanently Deleted",
+          description: "Employee record has been removed permanently.",
         });
       } catch (error) {
         toast({
@@ -136,6 +195,8 @@ export function useEmployees() {
     addEmployee,
     updateEmployee,
     deleteEmployee,
+    restoreEmployee,
+    purgeEmployee,
     getEmployeeById,
   };
 }

@@ -14,12 +14,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Building2,
+  Archive,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Employees", href: "/employees", icon: Users },
+  { name: "Archived Employees", href: "/employees/archived", icon: Archive },
   { name: "Attendance", href: "/attendance", icon: Clock },
   { name: "Payroll", href: "/payroll", icon: DollarSign },
   { name: "Performance", href: "/performance", icon: TrendingUp },

@@ -24,11 +24,14 @@ import { UserPlus, Download } from "lucide-react";
 type ViewMode = "list" | "add" | "edit" | "view";
 
 export default function Employees() {
-  const { employees, isLoading, addEmployee, updateEmployee, deleteEmployee } = useEmployees();
+  const { employees, isLoading, addEmployee, updateEmployee, deleteEmployee, restoreEmployee, purgeEmployee } = useEmployees();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
+  const [purgeDialogOpen, setPurgeDialogOpen] = useState(false);
+  const [employeeToPurge, setEmployeeToPurge] = useState<Employee | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   const handleView = (employee: Employee) => {
     setSelectedEmployee(employee);
@@ -45,11 +48,24 @@ export default function Employees() {
     setDeleteDialogOpen(true);
   };
 
+  const handlePurge = (employee: Employee) => {
+    setEmployeeToPurge(employee);
+    setPurgeDialogOpen(true);
+  };
+
   const handleConfirmDelete = async () => {
     if (employeeToDelete) {
       await deleteEmployee(employeeToDelete.id);
       setDeleteDialogOpen(false);
       setEmployeeToDelete(null);
+    }
+  };
+
+  const handleConfirmPurge = async () => {
+    if (employeeToPurge) {
+      await purgeEmployee(employeeToPurge.id);
+      setPurgeDialogOpen(false);
+      setEmployeeToPurge(null);
     }
   };
 
@@ -96,11 +112,32 @@ export default function Employees() {
       </div>
 
       {/* Employee Table */}
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <button
+            className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium ${!showArchived ? 'bg-primary text-primary-foreground' : 'bg-transparent text-muted-foreground'}`}
+            onClick={() => setShowArchived(false)}
+          >
+            Active
+          </button>
+          <button
+            className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium ${showArchived ? 'bg-primary text-primary-foreground' : 'bg-transparent text-muted-foreground'}`}
+            onClick={() => setShowArchived(true)}
+          >
+            Archived
+          </button>
+        </div>
+        <p className="text-sm text-muted-foreground">{showArchived ? 'Viewing archived employees' : 'Viewing active employees'}</p>
+      </div>
+
       <EmployeeTable
-        employees={employees}
+        employees={employees.filter((e) => !!e.archived === showArchived)}
         onView={handleView}
         onEdit={handleEdit}
         onDelete={handleDelete}
+        isArchivedView={showArchived}
+        onRestore={async (emp) => await restoreEmployee(emp.id)}
+        onPurge={(emp) => handlePurge(emp)}
       />
 
       {/* Add Employee Dialog */}
@@ -159,6 +196,16 @@ export default function Employees() {
         onOpenChange={setDeleteDialogOpen}
         onConfirm={handleConfirmDelete}
         isLoading={isLoading}
+        mode="soft"
+      />
+
+      <DeleteEmployeeDialog
+        employee={employeeToPurge}
+        open={purgeDialogOpen}
+        onOpenChange={setPurgeDialogOpen}
+        onConfirm={handleConfirmPurge}
+        isLoading={isLoading}
+        mode="hard"
       />
     </DashboardLayout>
   );

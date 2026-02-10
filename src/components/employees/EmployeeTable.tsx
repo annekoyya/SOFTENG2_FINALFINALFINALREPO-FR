@@ -34,6 +34,9 @@ interface EmployeeTableProps {
   onView: (employee: Employee) => void;
   onEdit: (employee: Employee) => void;
   onDelete: (employee: Employee) => void;
+  isArchivedView?: boolean;
+  onRestore?: (employee: Employee) => void;
+  onPurge?: (employee: Employee) => void;
 }
 
 const statusStyles = {
@@ -50,7 +53,7 @@ const statusLabels = {
   suspended: "Suspended",
 };
 
-export function EmployeeTable({ employees, onView, onEdit, onDelete }: EmployeeTableProps) {
+export function EmployeeTable({ employees, onView, onEdit, onDelete, isArchivedView = false, onRestore, onPurge }: EmployeeTableProps) {
   const [search, setSearch] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -191,21 +194,39 @@ export function EmployeeTable({ employees, onView, onEdit, onDelete }: EmployeeT
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => onView(employee)}>
-                          <Eye className="mr-2 h-4 w-4" />
-                          View Details
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onEdit(employee)}>
-                          <Pencil className="mr-2 h-4 w-4" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => onDelete(employee)}
-                          className="text-destructive focus:text-destructive"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
+                        {!isArchivedView ? (
+                          <>
+                            <DropdownMenuItem onClick={() => onView(employee)}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => onEdit(employee)}>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => onDelete(employee)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Archive
+                            </DropdownMenuItem>
+                          </>
+                        ) : (
+                          <>
+                            <DropdownMenuItem onClick={() => onRestore && onRestore(employee)}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              Restore
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => onPurge && onPurge(employee)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Permanently Delete
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
