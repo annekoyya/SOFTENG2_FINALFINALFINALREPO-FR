@@ -1,37 +1,56 @@
-import { useState } from "react";
+// src/pages/Employees.tsx
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { EmployeeTable } from "@/components/employees/EmployeeTable";
 import { EmployeeForm } from "@/components/employees/EmployeeForm";
 import { EmployeeDetails } from "@/components/employees/EmployeeDetails";
 import { DeleteEmployeeDialog } from "@/components/employees/DeleteEmployeeDialog";
 import { useEmployees } from "@/hooks/useEmployees";
-import { Employee, EmployeeFormData } from "@/types/employee";
+import type { Employee } from "@/types/employee";
+import { EmployeeFormData } from "@/types/employee";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
+  Sheet, SheetContent, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
 import { UserPlus, Download } from "lucide-react";
 
 type ViewMode = "list" | "add" | "edit" | "view";
 
 export default function Employees() {
-  const { employees, isLoading, addEmployee, updateEmployee, deleteEmployee, restoreEmployee, purgeEmployee } = useEmployees();
-  const [viewMode, setViewMode] = useState<ViewMode>("list");
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
-  const [purgeDialogOpen, setPurgeDialogOpen] = useState(false);
-  const [employeeToPurge, setEmployeeToPurge] = useState<Employee | null>(null);
-  const [showArchived, setShowArchived] = useState(false);
+  const {
+    employees,
+    archivedEmployees,
+    isLoading,
+    fetchEmployees,
+    fetchArchivedEmployees,
+    addEmployee,
+    updateEmployee,
+    deleteEmployee,
+    restoreEmployee,
+    purgeEmployee,
+  } = useEmployees();
+
+  const [viewMode, setViewMode]                   = useState<ViewMode>("list");
+  const [selectedEmployee, setSelectedEmployee]   = useState<Employee | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen]   = useState(false);
+  const [employeeToDelete, setEmployeeToDelete]   = useState<Employee | null>(null);
+  const [purgeDialogOpen, setPurgeDialogOpen]     = useState(false);
+  const [employeeToPurge, setEmployeeToPurge]     = useState<Employee | null>(null);
+  const [showArchived, setShowArchived]           = useState(false);
+
+  // Load data on mount and when toggling archived view
+  useEffect(() => {
+    if (showArchived) {
+      fetchArchivedEmployees();
+    } else {
+      fetchEmployees();
+    }
+  }, [showArchived, fetchEmployees, fetchArchivedEmployees]);
+
+  // ─── Handlers ──────────────────────────────────────────────────────────────
 
   const handleView = (employee: Employee) => {
     setSelectedEmployee(employee);
@@ -87,6 +106,9 @@ export default function Employees() {
     setSelectedEmployee(null);
   };
 
+  // Fix: use deleted_at instead of archived boolean
+  const displayedEmployees = showArchived ? archivedEmployees : employees;
+
   return (
     <DashboardLayout>
       {/* Page Header */}
@@ -111,27 +133,33 @@ export default function Employees() {
         </div>
       </div>
 
-      {/* Employee Table */}
+      {/* Active / Archived Toggle */}
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <button
-            className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium ${!showArchived ? 'bg-primary text-primary-foreground' : 'bg-transparent text-muted-foreground'}`}
+            className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              !showArchived ? "bg-primary text-primary-foreground" : "bg-transparent text-muted-foreground"
+            }`}
             onClick={() => setShowArchived(false)}
           >
             Active
           </button>
           <button
-            className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium ${showArchived ? 'bg-primary text-primary-foreground' : 'bg-transparent text-muted-foreground'}`}
+            className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              showArchived ? "bg-primary text-primary-foreground" : "bg-transparent text-muted-foreground"
+            }`}
             onClick={() => setShowArchived(true)}
           >
             Archived
           </button>
         </div>
-        <p className="text-sm text-muted-foreground">{showArchived ? 'Viewing archived employees' : 'Viewing active employees'}</p>
+        <p className="text-sm text-muted-foreground">
+          {showArchived ? "Viewing archived employees" : `${employees.length} active employees`}
+        </p>
       </div>
 
       <EmployeeTable
-        employees={employees.filter((e) => !!e.archived === showArchived)}
+        employees={displayedEmployees}
         onView={handleView}
         onEdit={handleEdit}
         onDelete={handleDelete}
@@ -146,11 +174,7 @@ export default function Employees() {
           <DialogHeader>
             <DialogTitle className="font-display text-xl">Add New Employee</DialogTitle>
           </DialogHeader>
-          <EmployeeForm
-            onSubmit={handleAddEmployee}
-            onCancel={handleCloseForm}
-            isLoading={isLoading}
-          />
+          <EmployeeForm onSubmit={handleAddEmployee} onCancel={handleCloseForm} isLoading={isLoading} />
         </DialogContent>
       </Dialog>
 
@@ -161,12 +185,7 @@ export default function Employees() {
             <DialogTitle className="font-display text-xl">Edit Employee</DialogTitle>
           </DialogHeader>
           {selectedEmployee && (
-            <EmployeeForm
-              employee={selectedEmployee}
-              onSubmit={handleUpdateEmployee}
-              onCancel={handleCloseForm}
-              isLoading={isLoading}
-            />
+            <EmployeeForm employee={selectedEmployee} onSubmit={handleUpdateEmployee} onCancel={handleCloseForm} isLoading={isLoading} />
           )}
         </DialogContent>
       </Dialog>
@@ -178,18 +197,12 @@ export default function Employees() {
             <SheetTitle>Employee Details</SheetTitle>
           </SheetHeader>
           {selectedEmployee && (
-            <EmployeeDetails
-              employee={selectedEmployee}
-              onEdit={() => {
-                setViewMode("edit");
-              }}
-              onClose={handleCloseForm}
-            />
+            <EmployeeDetails employee={selectedEmployee} onEdit={() => setViewMode("edit")} onClose={handleCloseForm} />
           )}
         </SheetContent>
       </Sheet>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete (soft) Dialog */}
       <DeleteEmployeeDialog
         employee={employeeToDelete}
         open={deleteDialogOpen}
@@ -199,6 +212,7 @@ export default function Employees() {
         mode="soft"
       />
 
+      {/* Purge (hard delete) Dialog */}
       <DeleteEmployeeDialog
         employee={employeeToPurge}
         open={purgeDialogOpen}

@@ -1,8 +1,13 @@
 import { useState, useCallback } from "react";
-import { Attendance, LeaveRequest, LiveWorkforceStatus, AttendanceSummary, MonthlyStatistics } from "@/types/attendance";
+import {
+  Attendance,
+  LeaveRequest,
+  LiveWorkforceStatus,
+  AttendanceSummary,
+  MonthlyStatistics,
+} from "@/types/attendance";
 
 interface UseAttendanceReturn {
-  // State
   liveStatus: LiveWorkforceStatus | null;
   attendances: Attendance[];
   leaveRequests: LeaveRequest[];
@@ -10,14 +15,12 @@ interface UseAttendanceReturn {
   monthlyStats: MonthlyStatistics | null;
   isLoading: boolean;
   error: string | null;
-
-  // Methods
   fetchLiveStatus: () => Promise<void>;
-  fetchAttendance: (startDate?: string, endDate?: string, filters?: any) => Promise<void>;
-  clockIn: () => Promise<void>;
-  clockOut: () => Promise<void>;
-  createLeaveRequest: (data: Partial<LeaveRequest>) => Promise<void>;
+  fetchAttendance: (startDate?: string, endDate?: string, filters?: Record<string, string>) => Promise<void>;
+  clockIn: (employeeId?: string) => Promise<void>;
+  clockOut: (employeeId?: string) => Promise<void>;
   fetchLeaveRequests: () => Promise<void>;
+  createLeaveRequest: (data: Partial<LeaveRequest>) => Promise<void>;
   approveLeaveRequest: (id: string, reason?: string) => Promise<void>;
   rejectLeaveRequest: (id: string, reason?: string) => Promise<void>;
   getSummary: (month?: string, year?: string) => Promise<void>;
@@ -33,7 +36,7 @@ export function useAttendance(): UseAttendanceReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleError = (err: any) => {
+  const handleError = (err: unknown) => {
     const message = err instanceof Error ? err.message : "An error occurred";
     setError(message);
     console.error("Attendance error:", err);
@@ -46,7 +49,7 @@ export function useAttendance(): UseAttendanceReturn {
       const response = await fetch("/api/attendance/live-status");
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-      setLiveStatus(data);
+      setLiveStatus(data.data ?? data);
     } catch (err) {
       handleError(err);
     } finally {
@@ -55,7 +58,7 @@ export function useAttendance(): UseAttendanceReturn {
   }, []);
 
   const fetchAttendance = useCallback(
-    async (startDate?: string, endDate?: string, filters?: any) => {
+    async (startDate?: string, endDate?: string, filters?: Record<string, string>) => {
       setIsLoading(true);
       setError(null);
       try {
@@ -70,7 +73,7 @@ export function useAttendance(): UseAttendanceReturn {
         const response = await fetch(`/api/attendance?${params.toString()}`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
-        setAttendances(data.data || data);
+        setAttendances(data.data?.data ?? data.data ?? data);
       } catch (err) {
         handleError(err);
       } finally {
@@ -80,69 +83,60 @@ export function useAttendance(): UseAttendanceReturn {
     []
   );
 
-  const clockIn = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/attendance/clock-in", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          device_info: navigator.userAgent,
-        }),
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      // Refresh live status after clocking in
-      await fetchLiveStatus();
-    } catch (err) {
-      handleError(err);
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [fetchLiveStatus]);
+  const clockIn = useCallback(
+    async (employeeId?: string) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const response = await fetch("/api/attendance/clock-in", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            employee_id: employeeId ?? localStorage.getItem("currentEmployeeId") ?? "",
+            device_info: navigator.userAgent,
+          }),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        await fetchLiveStatus();
+      } catch (err) {
+        handleError(err);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [fetchLiveStatus]
+  );
 
-  const clockOut = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/attendance/clock-out", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          device_info: navigator.userAgent,
-        }),
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      // Refresh live status after clocking out
-      await fetchLiveStatus();
-    } catch (err) {
-      handleError(err);
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [fetchLiveStatus]);
+  const clockOut = useCallback(
+    async (employeeId?: string) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const response = await fetch("/api/attendance/clock-out", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            employee_id: employeeId ?? localStorage.getItem("currentEmployeeId") ?? "",
+            device_info: navigator.userAgent,
+          }),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        await fetchLiveStatus();
+      } catch (err) {
+        handleError(err);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [fetchLiveStatus]
+  );
 
-  const createLeaveRequest = useCallback(async (data: Partial<LeaveRequest>) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/leave-requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      // Refresh leave requests after creating
-      await fetchLeaveRequests();
-    } catch (err) {
-      handleError(err);
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  // ─── FIX: fetchLeaveRequests declared BEFORE createLeaveRequest ──────────
+  // Original bug: createLeaveRequest's useCallback dep array referenced
+  // fetchLeaveRequests on line 147, but it was only declared on line 149.
+  // JS `const` is not hoisted — using it before declaration = ReferenceError.
 
   const fetchLeaveRequests = useCallback(async () => {
     setIsLoading(true);
@@ -151,13 +145,35 @@ export function useAttendance(): UseAttendanceReturn {
       const response = await fetch("/api/leave-requests");
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-      setLeaveRequests(Array.isArray(data) ? data : data.data || []);
+      setLeaveRequests(Array.isArray(data) ? data : (data.data ?? []));
     } catch (err) {
       handleError(err);
     } finally {
       setIsLoading(false);
     }
   }, []);
+
+  const createLeaveRequest = useCallback(
+    async (data: Partial<LeaveRequest>) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const response = await fetch("/api/leave-requests", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        await fetchLeaveRequests();
+      } catch (err) {
+        handleError(err);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [fetchLeaveRequests]
+  );
 
   const approveLeaveRequest = useCallback(
     async (id: string, reason?: string) => {
@@ -170,7 +186,6 @@ export function useAttendance(): UseAttendanceReturn {
           body: JSON.stringify({ reason }),
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        // Refresh leave requests after approval
         await fetchLeaveRequests();
       } catch (err) {
         handleError(err);
@@ -193,7 +208,6 @@ export function useAttendance(): UseAttendanceReturn {
           body: JSON.stringify({ reason }),
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        // Refresh leave requests after rejection
         await fetchLeaveRequests();
       } catch (err) {
         handleError(err);
@@ -212,11 +226,10 @@ export function useAttendance(): UseAttendanceReturn {
       const params = new URLSearchParams();
       if (month) params.append("month", month);
       if (year) params.append("year", year);
-
       const response = await fetch(`/api/attendance/summary?${params.toString()}`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-      setSummary(data);
+      setSummary(data.data ?? data);
     } catch (err) {
       handleError(err);
     } finally {
@@ -231,7 +244,7 @@ export function useAttendance(): UseAttendanceReturn {
       const response = await fetch(`/api/attendance/monthly-stats?month=${month}&year=${year}`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-      setMonthlyStats(data);
+      setMonthlyStats(data.data ?? data);
     } catch (err) {
       handleError(err);
     } finally {
@@ -251,8 +264,8 @@ export function useAttendance(): UseAttendanceReturn {
     fetchAttendance,
     clockIn,
     clockOut,
-    createLeaveRequest,
     fetchLeaveRequests,
+    createLeaveRequest,
     approveLeaveRequest,
     rejectLeaveRequest,
     getSummary,

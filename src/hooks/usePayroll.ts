@@ -1,154 +1,192 @@
+// src/hooks/usePayroll.ts
+// Fix: import Payroll from @/types/payroll (single source of truth)
+// Previously had a local Payroll interface causing type conflicts with PayrollTable/PayrollDrawer
 import { useState, useCallback } from "react";
-import { Payroll, PayrollSummary } from "@/types/payroll";
+import { authFetch } from "./api";
+import type { Payroll, PayrollSummary } from "@/types/payroll";
 
-export function usePayroll() {
-  const [payrolls, setPayrolls] = useState<Payroll[]>([]);
-  const [summary, setSummary] = useState<PayrollSummary | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export type { Payroll, PayrollSummary };
 
-  const fetchPayrolls = useCallback(async (year: number, month: number) => {
-    setIsLoading(true);
-    setError(null);
+export type PayrollStatus =
+  | "draft" | "pending_approval" | "approved"
+  | "processed" | "paid" | "failed";
+
+export interface PayrollFilters {
+  status?: PayrollStatus;
+  month?: number;
+  year?: number;
+  employee_id?: number;
+  search?: string;
+  page?: number;
+}
+
+interface UsePayrollReturn {
+  payrolls: Payroll[];
+  selectedPayroll: Payroll | null;
+  summary: PayrollSummary | null;
+  isLoading: boolean;
+  error: string | null;
+  fetchPayrolls: (filters?: PayrollFilters) => Promise<void>;
+  fetchPayroll: (id: number) => Promise<void>;
+  fetchSummary: (year?: number, month?: number) => Promise<void>;
+  calculatePayroll: (employeeId: number, periodStart: string, periodEnd: string) => Promise<Payroll>;
+  updatePayroll: (id: number, data: Partial<Pick<Payroll, "overtime_pay" | "bonuses" | "allowances" | "other_deductions" | "notes">>) => Promise<void>;
+  submitForApproval: (id: number) => Promise<void>;
+  approvePayroll: (id: number) => Promise<void>;
+  rejectPayroll: (id: number, reason: string) => Promise<void>;
+  processPayroll: (id: number) => Promise<void>;
+  markAsPaid: (id: number) => Promise<void>;
+  deletePayroll: (id: number) => Promise<void>;
+  clearSelectedPayroll: () => void;
+  clearError: () => void;
+}
+
+export function usePayroll(): UsePayrollReturn {
+  const [payrolls, setPayrolls]               = useState<Payroll[]>([]);
+  const [selectedPayroll, setSelectedPayroll] = useState<Payroll | null>(null);
+  const [summary, setSummary]                 = useState<PayrollSummary | null>(null);
+  const [isLoading, setIsLoading]             = useState(false);
+  const [error, setError]                     = useState<string | null>(null);
+
+  const handleError = (err: unknown) => {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    setError(message);
+    console.error("Payroll error:", err);
+  };
+
+  // ─── Fetch ─────────────────────────────────────────────────────────────────
+
+  const fetchPayrolls = useCallback(async (filters?: PayrollFilters) => {
+    setIsLoading(true); setError(null);
     try {
-      // In production, this would be an API call
-      // const response = await fetch(`/api/payrolls?year=${year}&month=${month}`);
-      // const data = await response.json();
-      // setPayrolls(data.data);
-      setPayrolls([]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-    } finally {
-      setIsLoading(false);
-    }
+      const params = new URLSearchParams();
+      if (filters?.status)      params.append("status", filters.status);
+      if (filters?.month)       params.append("month", String(filters.month));
+      if (filters?.year)        params.append("year", String(filters.year));
+      if (filters?.employee_id) params.append("employee_id", String(filters.employee_id));
+      if (filters?.search)      params.append("search", filters.search);
+      if (filters?.page)        params.append("page", String(filters.page));
+
+      const res  = await authFetch(`/api/payrolls?${params.toString()}`);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? "Failed to fetch payrolls");
+      setPayrolls(body.data?.data ?? body.data ?? []);
+    } catch (err) { handleError(err); }
+    finally { setIsLoading(false); }
   }, []);
 
-  const fetchSummary = useCallback(async (year: number, month: number) => {
+  const fetchPayroll = useCallback(async (id: number) => {
+    setIsLoading(true); setError(null);
     try {
-      // In production, this would be an API call
-      // const response = await fetch(`/api/payrolls/summary?year=${year}&month=${month}`);
-      // const data = await response.json();
-      // setSummary(data.data);
-      setSummary({
-        total_cost: 0,
-        total_net: 0,
-        total_deductions: 0,
-        count: 0,
-        pending_approval: 0,
-        statuses: {},
+      const res  = await authFetch(`/api/payrolls/${id}`);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? "Failed to fetch payroll");
+      setSelectedPayroll(body.data);
+    } catch (err) { handleError(err); }
+    finally { setIsLoading(false); }
+  }, []);
+
+  const fetchSummary = useCallback(async (year?: number, month?: number) => {
+    setIsLoading(true); setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (year)  params.append("year", String(year));
+      if (month) params.append("month", String(month));
+      const res  = await authFetch(`/api/payrolls/summary?${params.toString()}`);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? "Failed to fetch summary");
+      setSummary(body.data);
+    } catch (err) { handleError(err); }
+    finally { setIsLoading(false); }
+  }, []);
+
+  // ─── Create ────────────────────────────────────────────────────────────────
+
+  const calculatePayroll = useCallback(async (
+    employeeId: number,
+    periodStart: string,
+    periodEnd: string
+  ): Promise<Payroll> => {
+    setIsLoading(true); setError(null);
+    try {
+      const res  = await authFetch("/api/payrolls/calculate", {
+        method: "POST",
+        body: JSON.stringify({ employee_id: employeeId, pay_period_start: periodStart, pay_period_end: periodEnd }),
       });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-    }
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? "Failed to calculate payroll");
+      setPayrolls((prev) => [body.data, ...prev]);
+      return body.data as Payroll;
+    } catch (err) { handleError(err); throw err; }
+    finally { setIsLoading(false); }
   }, []);
 
-  const calculatePayroll = useCallback(
-    async (employeeId: string, periodStart: string, periodEnd: string) => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        // In production, this would be an API call
-        // const response = await fetch("/api/payrolls/calculate", {
-        //   method: "POST",
-        //   body: JSON.stringify({ employee_id: employeeId, pay_period_start: periodStart, pay_period_end: periodEnd }),
-        // });
-        // const data = await response.json();
-        // return data.data;
-        return null;
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "An error occurred");
-        return null;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    []
-  );
+  // ─── Update ────────────────────────────────────────────────────────────────
 
-  const approvePayroll = useCallback(async (payrollId: string) => {
-    setIsLoading(true);
-    setError(null);
+  const updatePayroll = useCallback(async (
+    id: number,
+    data: Partial<Pick<Payroll, "overtime_pay" | "bonuses" | "allowances" | "other_deductions" | "notes">>
+  ) => {
+    setIsLoading(true); setError(null);
     try {
-      // In production, this would be an API call
-      // const response = await fetch(`/api/payrolls/${payrollId}/approve`, {
-      //   method: "POST",
-      // });
-      // return await response.json();
-      return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+      const res  = await authFetch(`/api/payrolls/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? "Failed to update payroll");
+      setPayrolls((prev) => prev.map((p) => (p.id === id ? body.data : p)));
+      if (selectedPayroll?.id === id) setSelectedPayroll(body.data);
+    } catch (err) { handleError(err); throw err; }
+    finally { setIsLoading(false); }
+  }, [selectedPayroll]);
 
-  const rejectPayroll = useCallback(async (payrollId: string, reason: string) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      // In production, this would be an API call
-      // const response = await fetch(`/api/payrolls/${payrollId}/reject`, {
-      //   method: "POST",
-      //   body: JSON.stringify({ reason }),
-      // });
-      // return await response.json();
-      return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  // ─── Workflow ──────────────────────────────────────────────────────────────
 
-  const processPayroll = useCallback(async (payrollId: string) => {
-    setIsLoading(true);
-    setError(null);
+  const workflowAction = useCallback(async (
+    id: number,
+    endpoint: string,
+    body?: Record<string, string>
+  ) => {
+    setIsLoading(true); setError(null);
     try {
-      // In production, this would be an API call
-      // const response = await fetch(`/api/payrolls/${payrollId}/process`, {
-      //   method: "POST",
-      // });
-      // return await response.json();
-      return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+      const res     = await authFetch(`/api/payrolls/${id}/${endpoint}`, {
+        method: "POST",
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const resBody = await res.json();
+      if (!res.ok) throw new Error(resBody.message ?? `Action '${endpoint}' failed`);
+      setPayrolls((prev) => prev.map((p) => (p.id === id ? resBody.data : p)));
+      if (selectedPayroll?.id === id) setSelectedPayroll(resBody.data);
+    } catch (err) { handleError(err); throw err; }
+    finally { setIsLoading(false); }
+  }, [selectedPayroll]);
 
-  const markAsPaid = useCallback(async (payrollId: string) => {
-    setIsLoading(true);
-    setError(null);
+  const submitForApproval = useCallback((id: number) => workflowAction(id, "submit"),                    [workflowAction]);
+  const approvePayroll    = useCallback((id: number) => workflowAction(id, "approve"),                   [workflowAction]);
+  const rejectPayroll     = useCallback((id: number, reason: string) => workflowAction(id, "reject", { reason }), [workflowAction]);
+  const processPayroll    = useCallback((id: number) => workflowAction(id, "process"),                   [workflowAction]);
+  const markAsPaid        = useCallback((id: number) => workflowAction(id, "mark-paid"),                 [workflowAction]);
+
+  // ─── Delete ────────────────────────────────────────────────────────────────
+
+  const deletePayroll = useCallback(async (id: number) => {
+    setIsLoading(true); setError(null);
     try {
-      // In production, this would be an API call
-      // const response = await fetch(`/api/payrolls/${payrollId}/mark-paid`, {
-      //   method: "POST",
-      // });
-      // return await response.json();
-      return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+      const res  = await authFetch(`/api/payrolls/${id}`, { method: "DELETE" });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? "Failed to delete payroll");
+      setPayrolls((prev) => prev.filter((p) => p.id !== id));
+      if (selectedPayroll?.id === id) setSelectedPayroll(null);
+    } catch (err) { handleError(err); throw err; }
+    finally { setIsLoading(false); }
+  }, [selectedPayroll]);
+
+  const clearSelectedPayroll = useCallback(() => setSelectedPayroll(null), []);
+  const clearError           = useCallback(() => setError(null), []);
 
   return {
-    payrolls,
-    summary,
-    isLoading,
-    error,
-    fetchPayrolls,
-    fetchSummary,
-    calculatePayroll,
-    approvePayroll,
-    rejectPayroll,
-    processPayroll,
-    markAsPaid,
+    payrolls, selectedPayroll, summary, isLoading, error,
+    fetchPayrolls, fetchPayroll, fetchSummary,
+    calculatePayroll, updatePayroll,
+    submitForApproval, approvePayroll, rejectPayroll, processPayroll, markAsPaid,
+    deletePayroll, clearSelectedPayroll, clearError,
   };
 }

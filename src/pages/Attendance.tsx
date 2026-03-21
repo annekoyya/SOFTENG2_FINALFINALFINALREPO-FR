@@ -1,31 +1,27 @@
+// src/pages/Attendance.tsx
 import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Clock,
-  Users,
-  AlertCircle,
-  CheckCircle,
-  Clock3,
-  Download,
-} from "lucide-react";
+import { Clock, CheckCircle, Download } from "lucide-react";
+// Fix: ClockInWidget uses default export — import accordingly
 import { ClockInWidget } from "@/components/attendance/ClockInWidget";
 import { LiveDashboard } from "@/components/attendance/LiveDashboard";
 import { AttendanceHistory } from "@/components/attendance/AttendanceHistory";
 import { LeaveRequestPortal } from "@/components/attendance/LeaveRequestPortal";
 import { useToast } from "@/hooks/use-toast";
 import { useAttendance } from "@/hooks/useAttendance";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Attendance() {
-  const { toast } = useToast();
+  const { toast }    = useToast();
+  const { user, isManager, isHR, isAdmin } = useAuth();
   const {
     liveStatus,
     attendances,
     leaveRequests,
-    summary,
     isLoading: isLoadingStatus,
     fetchLiveStatus,
     fetchAttendance,
@@ -35,34 +31,37 @@ export default function Attendance() {
     fetchLeaveRequests,
     approveLeaveRequest,
     rejectLeaveRequest,
+    getMonthlyStats,
+    monthlyStats,
   } = useAttendance();
 
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [isManager, setIsManager] = useState(false);
   const [activeTab, setActiveTab] = useState("dashboard");
 
+  // True if user can see the manager live dashboard
+  const canSeeFullDashboard = isManager() || isHR() || isAdmin();
+
+  // Today's attendance record for the current user
+  const todayRecord = attendances.find((a) => {
+    const today = new Date().toISOString().split("T")[0];
+    return a.date === today;
+  });
+
   useEffect(() => {
-    // Load current user info
-    // In production, get from auth context
-    setCurrentUser({
-      id: "1",
-      first_name: "John",
-      last_name: "Doe",
-      employee_id: "EMP001",
-      role: "employee",
-      department: "Operations",
-    });
-    setIsManager(false);
-    
-    // Load initial data
     fetchLiveStatus();
-    fetchAttendance();
     fetchLeaveRequests();
-  }, [fetchLiveStatus, fetchAttendance, fetchLeaveRequests]);
+    // Load this month's attendance for the current employee
+    const now = new Date();
+    fetchAttendance(
+      `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`,
+      new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
+    );
+    if (user?.id) {
+      getMonthlyStats(now.getMonth() + 1, now.getFullYear());
+    }
+  }, []);
 
   return (
     <DashboardLayout>
-      {/* Page Header */}
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-3xl font-semibold text-foreground">
@@ -88,7 +87,7 @@ export default function Attendance() {
 
         {/* Live Dashboard Tab */}
         <TabsContent value="dashboard" className="space-y-6">
-          {isManager ? (
+          {canSeeFullDashboard ? (
             <LiveDashboard status={liveStatus} isLoading={isLoadingStatus} />
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
@@ -103,16 +102,22 @@ export default function Attendance() {
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Clock In</span>
-                      <span className="font-mono font-semibold text-lg">--:--</span>
+                      <span className="font-mono font-semibold text-lg">
+                        {todayRecord?.time_in ?? "--:--"}
+                      </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Clock Out</span>
-                      <span className="font-mono font-semibold text-lg">--:--</span>
+                      <span className="font-mono font-semibold text-lg">
+                        {todayRecord?.time_out ?? "--:--"}
+                      </span>
                     </div>
                     <div className="border-t border-border pt-3">
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">Hours Worked</span>
-                        <span className="font-mono font-semibold text-lg">0.00 hrs</span>
+                        <span className="font-mono font-semibold text-lg">
+                          {todayRecord?.hours_worked ?? "0.00"} hrs
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -130,15 +135,21 @@ export default function Attendance() {
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Present</span>
-                      <Badge className="bg-green-100 text-green-800">0 days</Badge>
+                      <Badge className="bg-green-100 text-green-800">
+                        {monthlyStats?.present ?? 0} days
+                      </Badge>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Late</span>
-                      <Badge className="bg-yellow-100 text-yellow-800">0 days</Badge>
+                      <Badge className="bg-yellow-100 text-yellow-800">
+                        {monthlyStats?.late ?? 0} days
+                      </Badge>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-muted-foreground">Absent</span>
-                      <Badge className="bg-red-100 text-red-800">0 days</Badge>
+                      <Badge className="bg-red-100 text-red-800">
+                        {monthlyStats?.absent ?? 0} days
+                      </Badge>
                     </div>
                   </div>
                 </CardContent>
@@ -149,10 +160,15 @@ export default function Attendance() {
 
         {/* Clock In/Out Tab */}
         <TabsContent value="clock">
-          {currentUser && !isManager && (
-            <ClockInWidget employee={currentUser} onSuccess={() => fetchLiveStatus()} />
-          )}
-          {isManager && (
+          {!canSeeFullDashboard && user ? (
+            <ClockInWidget
+              employee={user}
+              onSuccess={() => {
+                fetchLiveStatus();
+                fetchAttendance();
+              }}
+            />
+          ) : (
             <Card>
               <CardContent className="pt-6">
                 <p className="text-center text-muted-foreground">
@@ -169,10 +185,7 @@ export default function Attendance() {
             attendances={attendances}
             isLoading={isLoadingStatus}
             onExport={() => {
-              toast({
-                title: "Export Started",
-                description: "Attendance report will be downloaded shortly",
-              });
+              toast({ title: "Export Started", description: "Attendance report will download shortly" });
             }}
           />
         </TabsContent>
@@ -182,7 +195,7 @@ export default function Attendance() {
           <LeaveRequestPortal
             leaveRequests={leaveRequests}
             isLoading={isLoadingStatus}
-            isManager={isManager}
+            isManager={canSeeFullDashboard}
             onSubmit={createLeaveRequest}
             onApprove={approveLeaveRequest}
             onReject={rejectLeaveRequest}

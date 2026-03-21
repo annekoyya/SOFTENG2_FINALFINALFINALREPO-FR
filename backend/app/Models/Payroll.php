@@ -33,87 +33,104 @@ class Payroll extends Model
     ];
 
     protected $casts = [
-        'pay_period_start' => 'date',
-        'pay_period_end' => 'date',
-        'approved_at' => 'datetime',
-        'paid_at' => 'datetime',
-        'calculation_breakdown' => 'array',
-        'base_salary' => 'decimal:2',
-        'gross_salary' => 'decimal:2',
-        'total_deductions' => 'decimal:2',
-        'net_salary' => 'decimal:2',
+        'pay_period_start'        => 'date',
+        'pay_period_end'          => 'date',
+        'approved_at'             => 'datetime',
+        'paid_at'                 => 'datetime',
+        'calculation_breakdown'   => 'array',
+        'base_salary'             => 'decimal:2',
+        'overtime_pay'            => 'decimal:2',
+        'bonuses'                 => 'decimal:2',
+        'allowances'              => 'decimal:2',
+        'gross_salary'            => 'decimal:2',
+        'sss_contribution'        => 'decimal:2',
+        'philhealth_contribution' => 'decimal:2',
+        'pagibig_contribution'    => 'decimal:2',
+        'tax_withholding'         => 'decimal:2',
+        'other_deductions'        => 'decimal:2',
+        'total_deductions'        => 'decimal:2',
+        'net_salary'              => 'decimal:2',
     ];
 
-    /**
-     * Get the employee associated with this payroll record.
-     */
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
     }
 
-    /**
-     * Get the user who created this payroll record.
-     */
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
     }
 
-    /**
-     * Get the user who approved this payroll record.
-     */
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by');
     }
 
-    /**
-     * Scope to get payrolls for a specific month.
-     */
     public function scopeForMonth($query, $year, $month)
     {
         return $query->whereYear('pay_period_start', $year)
                      ->whereMonth('pay_period_start', $month);
     }
 
-    /**
-     * Scope to get payrolls by status.
-     */
     public function scopeByStatus($query, $status)
     {
         return $query->where('status', $status);
     }
 
-    /**
-     * Check if payroll can be edited.
-     */
     public function canEdit(): bool
     {
         return in_array($this->status, ['draft', 'pending_approval']);
     }
 
-    /**
-     * Check if payroll can be approved.
-     */
+    public function canSubmit(): bool
+    {
+        return $this->status === 'draft';
+    }
+
     public function canApprove(): bool
     {
         return $this->status === 'pending_approval';
     }
 
-    /**
-     * Check if payroll can be processed.
-     */
     public function canProcess(): bool
     {
         return $this->status === 'approved';
     }
 
-    /**
-     * Calculate net salary from gross and deductions.
-     */
-    public function recalculateNetSalary(): void
+    public function canMarkPaid(): bool
     {
-        $this->net_salary = $this->gross_salary - $this->total_deductions;
+        return $this->status === 'processed';
+    }
+
+    /**
+     * Recalculate gross = base + overtime + bonuses + allowances.
+     * Assign as float — decimal:2 cast handles formatting on READ, not WRITE.
+     * Never assign (string) to a decimal-cast property — causes type conflict.
+     */
+    public function recalculateGross(): void
+    {
+        $this->gross_salary = (float) $this->base_salary
+            + (float) $this->overtime_pay
+            + (float) $this->bonuses
+            + (float) $this->allowances;
+    }
+
+    public function recalculateNet(): void
+    {
+        $totalDeductions = (float) $this->sss_contribution
+            + (float) $this->philhealth_contribution
+            + (float) $this->pagibig_contribution
+            + (float) $this->tax_withholding
+            + (float) $this->other_deductions;
+
+        $this->total_deductions = $totalDeductions;
+        $this->net_salary       = (float) $this->gross_salary - $totalDeductions;
+    }
+
+    public function recalculate(): void
+    {
+        $this->recalculateGross();
+        $this->recalculateNet();
     }
 }

@@ -1,226 +1,194 @@
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
+// src/components/attendance/ClockInWidget.tsx
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Clock, LogIn, LogOut } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Clock, LogIn, LogOut, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { useAttendance } from "@/hooks/useAttendance";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 interface ClockInWidgetProps {
-  employee: any;
+  employee: { id: number | string; name?: string };
   onSuccess?: () => void;
 }
 
 export function ClockInWidget({ employee, onSuccess }: ClockInWidgetProps) {
-  const { toast } = useToast();
-  const [clockStatus, setClockStatus] = useState<"in" | "out" | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const { toast }                           = useToast();
+  const { clockIn, clockOut, attendances, isLoading } = useAttendance();
 
-  // Update clock every second
-  useState(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(interval);
+  const [currentTime, setCurrentTime]       = useState(new Date());
+  const [actionLoading, setActionLoading]   = useState(false);
+
+  // Live clock
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
   }, []);
 
+  // Find today's attendance record for this employee
+  const todayStr   = new Date().toISOString().split("T")[0];
+  const todayRecord = attendances.find((a) => a.date === todayStr);
+
+  const isClockedIn  = !!todayRecord?.time_in && !todayRecord?.time_out;
+  const isClockedOut = !!todayRecord?.time_in && !!todayRecord?.time_out;
+
+  const formatTime = (date: Date) =>
+    date.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+  const formatDate = (date: Date) =>
+    date.toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+  const formatTimeDisplay = (timeStr: string) => {
+    const [h, m] = timeStr.split(":");
+    const date   = new Date();
+    date.setHours(Number(h), Number(m));
+    return date.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" });
+  };
+
   const handleClockIn = async () => {
-    setIsLoading(true);
+    setActionLoading(true);
     try {
-      // In production, call API
-      // const response = await fetch('/api/attendance/clock-in', {
-      //   method: 'POST',
-      //   body: JSON.stringify({ employee_id: employee.id }),
-      // });
-      
-      toast({
-        title: "Success",
-        description: `${employee.first_name} clocked in at ${currentTime.toLocaleTimeString()}`,
-      });
-      
+      await clockIn(String(employee.id));
+      toast({ title: "Clocked In ✓", description: `You clocked in at ${formatTime(new Date())}` });
       onSuccess?.();
-      setClockStatus("in");
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to clock in. Please try again.",
-        variant: "destructive",
-      });
+    } catch {
+      toast({ title: "Clock In Failed", description: "Please try again", variant: "destructive" });
     } finally {
-      setIsLoading(false);
-      setConfirmOpen(false);
+      setActionLoading(false);
     }
   };
 
   const handleClockOut = async () => {
-    setIsLoading(true);
+    setActionLoading(true);
     try {
-      // In production, call API
-      // const response = await fetch('/api/attendance/clock-out', {
-      //   method: 'POST',
-      //   body: JSON.stringify({ employee_id: employee.id }),
-      // });
-      
-      toast({
-        title: "Success",
-        description: `${employee.first_name} clocked out at ${currentTime.toLocaleTimeString()}`,
-      });
-      
+      await clockOut(String(employee.id));
+      toast({ title: "Clocked Out ✓", description: `You clocked out at ${formatTime(new Date())}` });
       onSuccess?.();
-      setClockStatus(null);
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to clock out. Please try again.",
-        variant: "destructive",
-      });
+    } catch {
+      toast({ title: "Clock Out Failed", description: "Please try again", variant: "destructive" });
     } finally {
-      setIsLoading(false);
-      setConfirmOpen(false);
+      setActionLoading(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Digital Clock */}
-      <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10">
-        <CardContent className="pt-8">
-          <div className="text-center space-y-4">
-            <div className="text-6xl font-mono font-bold text-primary">
-              {currentTime.toLocaleTimeString("en-US", {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-              })}
-            </div>
-            <div className="text-lg text-muted-foreground">
-              {currentTime.toLocaleDateString("en-US", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Clock In/Out Controls */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Time Tracking
+    <div className="max-w-md mx-auto space-y-4">
+      {/* Live Clock Card */}
+      <Card className="text-center">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center justify-center gap-2 text-base text-muted-foreground font-normal">
+            <Clock className="h-4 w-4" />
+            Current Time
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-lg bg-muted p-4 text-center">
-              <p className="text-xs text-muted-foreground mb-2">CLOCK IN</p>
-              <p className="font-mono text-xl font-semibold">--:--:--</p>
-            </div>
-            <div className="rounded-lg bg-muted p-4 text-center">
-              <p className="text-xs text-muted-foreground mb-2">CLOCK OUT</p>
-              <p className="font-mono text-xl font-semibold">--:--:--</p>
-            </div>
+        <CardContent>
+          <div className="font-mono text-5xl font-bold tracking-tight text-foreground">
+            {formatTime(currentTime)}
           </div>
-
-          <div className="grid grid-cols-2 gap-4 pt-4">
-            <Button
-              size="lg"
-              onClick={() => {
-                setClockStatus("in");
-                setConfirmOpen(true);
-              }}
-              disabled={isLoading}
-              className="h-16 bg-green-600 hover:bg-green-700 text-white font-semibold text-lg"
-            >
-              <LogIn className="mr-2 h-5 w-5" />
-              Clock In
-            </Button>
-            <Button
-              size="lg"
-              onClick={() => {
-                setClockStatus("out");
-                setConfirmOpen(true);
-              }}
-              disabled={isLoading}
-              className="h-16 bg-red-600 hover:bg-red-700 text-white font-semibold text-lg"
-            >
-              <LogOut className="mr-2 h-5 w-5" />
-              Clock Out
-            </Button>
-          </div>
+          <p className="mt-1 text-sm text-muted-foreground">{formatDate(currentTime)}</p>
         </CardContent>
       </Card>
 
-      {/* Today's Summary */}
+      {/* Status Card */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Today's Summary</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex justify-between items-center py-2 border-b border-border">
-            <span className="text-sm text-muted-foreground">Status</span>
-            <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-xs font-semibold">
-              Not Clocked In
-            </span>
+        <CardContent className="pt-6 space-y-4">
+          {/* Current status badge */}
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Today's Status</span>
+            {isClockedOut ? (
+              <Badge className="bg-blue-100 text-blue-800">Completed</Badge>
+            ) : isClockedIn ? (
+              <Badge className="bg-green-100 text-green-800">
+                <span className="mr-1 h-2 w-2 rounded-full bg-green-500 inline-block animate-pulse" />
+                Clocked In
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-muted-foreground">Not Started</Badge>
+            )}
           </div>
-          <div className="flex justify-between items-center py-2 border-b border-border">
-            <span className="text-sm text-muted-foreground">Hours Worked</span>
-            <span className="font-semibold">0.00 hours</span>
+
+          {/* Time in / time out display */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className={cn(
+              "rounded-lg border p-3 text-center",
+              todayRecord?.time_in ? "border-green-200 bg-green-50" : "border-border bg-muted/30"
+            )}>
+              <p className="text-xs text-muted-foreground mb-1">Clock In</p>
+              <p className={cn("font-mono font-semibold text-lg", todayRecord?.time_in ? "text-green-700" : "text-muted-foreground")}>
+                {todayRecord?.time_in ? formatTimeDisplay(todayRecord.time_in) : "--:--"}
+              </p>
+            </div>
+            <div className={cn(
+              "rounded-lg border p-3 text-center",
+              todayRecord?.time_out ? "border-blue-200 bg-blue-50" : "border-border bg-muted/30"
+            )}>
+              <p className="text-xs text-muted-foreground mb-1">Clock Out</p>
+              <p className={cn("font-mono font-semibold text-lg", todayRecord?.time_out ? "text-blue-700" : "text-muted-foreground")}>
+                {todayRecord?.time_out ? formatTimeDisplay(todayRecord.time_out) : "--:--"}
+              </p>
+            </div>
           </div>
-          <div className="flex justify-between items-center py-2">
-            <span className="text-sm text-muted-foreground">Minutes Late</span>
-            <span className="font-semibold">0 minutes</span>
-          </div>
+
+          {/* Hours worked */}
+          {todayRecord?.hours_worked && Number(todayRecord.hours_worked) > 0 && (
+            <div className="rounded-lg border border-border bg-muted/30 p-3 text-center">
+              <p className="text-xs text-muted-foreground mb-1">Hours Worked</p>
+              <p className="font-mono font-semibold text-lg">
+                {Number(todayRecord.hours_worked).toFixed(2)} hrs
+              </p>
+            </div>
+          )}
+
+          {/* Late warning */}
+          {todayRecord?.minutes_late && Number(todayRecord.minutes_late) > 0 && (
+            <div className="flex items-center gap-2 rounded-lg border border-yellow-200 bg-yellow-50 p-3">
+              <AlertCircle className="h-4 w-4 text-yellow-600 shrink-0" />
+              <p className="text-sm text-yellow-700">
+                {todayRecord.within_grace_period
+                  ? `${todayRecord.minutes_late} min late — within grace period`
+                  : `${todayRecord.minutes_late} min late`}
+              </p>
+            </div>
+          )}
+
+          {/* Already done for the day */}
+          {isClockedOut && (
+            <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3">
+              <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+              <p className="text-sm text-green-700">You've completed your shift for today.</p>
+            </div>
+          )}
+
+          {/* Action Button */}
+          {!isClockedOut && (
+            <Button
+              onClick={isClockedIn ? handleClockOut : handleClockIn}
+              disabled={actionLoading || isLoading}
+              size="lg"
+              className={cn(
+                "w-full text-white font-semibold",
+                isClockedIn
+                  ? "bg-red-600 hover:bg-red-700"
+                  : "bg-green-600 hover:bg-green-700"
+              )}
+            >
+              {actionLoading ? (
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              ) : isClockedIn ? (
+                <LogOut className="mr-2 h-5 w-5" />
+              ) : (
+                <LogIn className="mr-2 h-5 w-5" />
+              )}
+              {actionLoading
+                ? "Processing..."
+                : isClockedIn
+                ? "Clock Out"
+                : "Clock In"}
+            </Button>
+          )}
         </CardContent>
       </Card>
-
-      {/* Confirmation Dialog */}
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {clockStatus === "in"
-                ? "Clock In to Work?"
-                : "Clock Out from Work?"}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {clockStatus === "in"
-                ? `Confirm that you are clocking in at ${currentTime.toLocaleTimeString()}`
-                : `Confirm that you are clocking out at ${currentTime.toLocaleTimeString()}`}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="bg-muted p-4 rounded-lg">
-            <p className="text-sm text-muted-foreground mb-1">Time</p>
-            <p className="font-mono text-xl font-semibold">
-              {currentTime.toLocaleTimeString()}
-            </p>
-          </div>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={clockStatus === "in" ? handleClockIn : handleClockOut}
-            disabled={isLoading}
-            className={
-              clockStatus === "in"
-                ? "bg-green-600 hover:bg-green-700"
-                : "bg-red-600 hover:bg-red-700"
-            }
-          >
-            {isLoading ? "Processing..." : "Confirm"}
-          </AlertDialogAction>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

@@ -6,54 +6,74 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('employees', function (Blueprint $table) {
-    $table->id(); // PK 
-    $table->unsignedBigInteger('new_hire_id')->nullable(); // FK to NewHires 
-    $table->foreignId('employee_id')->nullable()->constrained('employees')->onDelete('cascade');
-$table->string('role')->default('Employee'); // To identify if they are Admin, HR, or Staff
-    
-    // Personal & Contact Information 
-    $table->string('first_name');
-    $table->string('last_name');
-    $table->string('middle_name')->nullable();
-    $table->string('name_extension')->nullable();
-    $table->date('date_of_birth');
-    $table->string('email')->unique();
-    $table->string('phone_number');
-    $table->text('home_address');
+            $table->id();
 
-    // Emergency Contact 
-    $table->string('emergency_contact_name');
-    $table->string('emergency_contact_number');
-    $table->string('relationship');
+            // FK to new_hires table (optional onboarding link)
+            $table->unsignedBigInteger('new_hire_id')->nullable();
 
-    // Government IDs & Banking 
-    $table->string('tin')->nullable();
-    $table->string('sss_number')->nullable();
-    $table->string('pagibig_number')->nullable();
-    $table->string('bank_name')->nullable();
-    $table->string('account_name')->nullable();
-    $table->string('account_number')->nullable();
+            // Self-referencing manager relationship
+            $table->unsignedBigInteger('manager_id')->nullable();
+            $table->foreign('manager_id')->references('id')->on('employees')->onDelete('set null');
 
-    // Employment Details 
-    $table->date('start_date');
-    $table->string('department'); 
-    $table->string('job_category');
-    $table->string('employment_type'); // e.g., Regular, Probationary 
-    $table->string('reporting_manager')->nullable();
+            // Role / access level
+            $table->string('role')->default('Employee'); // Employee, HR, Admin, Manager, Accountant
 
-    $table->timestamps();
-});
+            // Employment status
+            $table->enum('status', ['active', 'on_leave', 'terminated', 'suspended'])->default('active');
+
+            // Personal & Contact Information
+            $table->string('first_name');
+            $table->string('last_name');
+            $table->string('middle_name')->nullable();
+            $table->string('name_extension')->nullable(); // Jr., Sr., III, etc.
+            $table->date('date_of_birth');
+            $table->string('email')->unique();
+            $table->string('phone_number');
+            $table->text('home_address');
+
+            // Emergency Contact
+            $table->string('emergency_contact_name');
+            $table->string('emergency_contact_number');
+            $table->string('relationship');
+
+            // Government IDs & Banking
+            $table->string('tin')->nullable();
+            $table->string('sss_number')->nullable();
+            $table->string('pagibig_number')->nullable();
+            $table->string('philhealth_number')->nullable();
+            $table->string('bank_name')->nullable();
+            $table->string('account_name')->nullable();
+            $table->string('account_number')->nullable();
+
+            // Employment Details
+            $table->date('start_date');
+            $table->date('end_date')->nullable(); // For contract/terminated employees
+            $table->string('department');
+            $table->string('job_category');
+            $table->enum('employment_type', ['regular', 'probationary', 'contractual', 'part_time', 'intern'])->default('probationary');
+            $table->string('reporting_manager')->nullable(); // Name string (can be upgraded to FK later)
+
+            // Compensation
+            $table->decimal('basic_salary', 12, 2)->default(0);
+
+            // Profile photo
+            $table->string('photo_path')->nullable();
+
+            // Soft deletes for archiving
+            $table->softDeletes();
+            $table->timestamps();
+
+            // Indexes
+            $table->index(['last_name', 'first_name']);
+            $table->index('department');
+            $table->index('status');
+            $table->index('employment_type');
+        });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('employees');

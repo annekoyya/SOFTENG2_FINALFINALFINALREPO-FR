@@ -1,202 +1,216 @@
+// src/hooks/useEmployees.ts
 import { useState, useCallback } from "react";
+import { authFetch } from "./api";
 import { Employee, EmployeeFormData } from "@/types/employee";
-import { mockEmployees } from "@/data/mockEmployees";
-import { useToast } from "@/hooks/use-toast";
 
-export function useEmployees() {
-  const [employees, setEmployees] = useState<Employee[]>(mockEmployees);
-  const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
+export type { Employee };
 
-  const generateEmployeeId = useCallback(() => {
-    const year = new Date().getFullYear();
-    const count = employees.length + 1;
-    return `BLH-${year}-${count.toString().padStart(3, "0")}`;
-  }, [employees.length]);
+export interface EmployeeFilters {
+  search?: string;
+  department?: string;
+  employment_type?: string;
+  status?: string;
+  page?: number;
+  per_page?: number;
+}
 
-  const addEmployee = useCallback(
-    async (data: EmployeeFormData) => {
-      setIsLoading(true);
-      try {
-        // Simulate API call
-        await new Promise((resolve) => setTimeout(resolve, 500));
+export interface PaginatedResponse<T> {
+  data: T[];
+  current_page: number;
+  last_page: number;
+  per_page: number;
+  total: number;
+}
 
-        const newEmployee: Employee = {
-          ...data,
-          id: crypto.randomUUID(),
-          employee_id: generateEmployeeId(),
-          department_name:
-            data.department_id === "1"
-              ? "Front Office"
-              : data.department_id === "2"
-              ? "Housekeeping"
-              : data.department_id === "3"
-              ? "Food & Beverage"
-              : data.department_id === "4"
-              ? "Engineering"
-              : data.department_id === "5"
-              ? "Human Resources"
-              : data.department_id === "6"
-              ? "Finance"
-              : data.department_id === "7"
-              ? "Sales & Marketing"
-              : "Security",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
+export interface UseEmployeesReturn {
+  employees: Employee[];
+  archivedEmployees: Employee[];
+  selectedEmployee: Employee | null;
+  pagination: Omit<PaginatedResponse<Employee>, "data"> | null;
+  isLoading: boolean;
+  error: string | null;
+  fetchEmployees: (filters?: EmployeeFilters) => Promise<void>;
+  fetchArchivedEmployees: (search?: string) => Promise<void>;
+  fetchEmployee: (id: number) => Promise<void>;
+  // Aliased names to match existing page code
+  addEmployee: (data: EmployeeFormData) => Promise<Employee>;
+  createEmployee: (data: EmployeeFormData) => Promise<Employee>;
+  updateEmployee: (id: number, data: EmployeeFormData) => Promise<Employee>;
+  updateStatus: (id: number, status: Employee["status"], endDate?: string) => Promise<void>;
+  deleteEmployee: (id: number) => Promise<void>;   // alias → archiveEmployee
+  archiveEmployee: (id: number) => Promise<void>;
+  purgeEmployee: (id: number) => Promise<void>;    // hard delete (admin only)
+  restoreEmployee: (id: number) => Promise<void>;
+  clearSelectedEmployee: () => void;
+  clearError: () => void;
+}
 
-        setEmployees((prev) => [...prev, newEmployee]);
-        toast({
-          title: "Employee Added",
-          description: `${data.first_name} ${data.last_name} has been added successfully.`,
-        });
-        return newEmployee;
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Failed to add employee. Please try again.",
-          variant: "destructive",
-        });
-        throw error;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [generateEmployeeId, toast]
-  );
+export function useEmployees(): UseEmployeesReturn {
+  const [employees, setEmployees]                 = useState<Employee[]>([]);
+  const [archivedEmployees, setArchivedEmployees] = useState<Employee[]>([]);
+  const [selectedEmployee, setSelectedEmployee]   = useState<Employee | null>(null);
+  const [pagination, setPagination]               = useState<Omit<PaginatedResponse<Employee>, "data"> | null>(null);
+  const [isLoading, setIsLoading]                 = useState(false);
+  const [error, setError]                         = useState<string | null>(null);
 
-  const updateEmployee = useCallback(
-    async (id: string, data: Partial<EmployeeFormData>) => {
-      setIsLoading(true);
-      try {
-        // Simulate API call
-        await new Promise((resolve) => setTimeout(resolve, 500));
+  const handleError = (err: unknown) => {
+    const message = err instanceof Error ? err.message : "An error occurred";
+    setError(message);
+    console.error("Employee error:", err);
+  };
 
-        setEmployees((prev) =>
-          prev.map((emp) =>
-            emp.id === id
-              ? { ...emp, ...data, updated_at: new Date().toISOString() }
-              : emp
-          )
-        );
-        toast({
-          title: "Employee Updated",
-          description: "Employee information has been updated successfully.",
-        });
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Failed to update employee. Please try again.",
-          variant: "destructive",
-        });
-        throw error;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [toast]
-  );
+  // ─── Fetch ─────────────────────────────────────────────────────────────────
 
-  const deleteEmployee = useCallback(
-    async (id: string) => {
-      // Soft-archive employee by default
-      setIsLoading(true);
-      try {
-        await new Promise((resolve) => setTimeout(resolve, 500));
+  const fetchEmployees = useCallback(async (filters?: EmployeeFilters) => {
+    setIsLoading(true); setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (filters?.search)          params.append("search", filters.search);
+      if (filters?.department)      params.append("department", filters.department);
+      if (filters?.employment_type) params.append("employment_type", filters.employment_type);
+      if (filters?.status)          params.append("status", filters.status);
+      if (filters?.page)            params.append("page", String(filters.page));
+      if (filters?.per_page)        params.append("per_page", String(filters.per_page));
 
-        setEmployees((prev) =>
-          prev.map((emp) =>
-            emp.id === id
-              ? { ...emp, archived: true, archived_at: new Date().toISOString() }
-              : emp
-          )
-        );
-        toast({
-          title: "Employee Archived",
-          description: "Employee has been archived and can be restored.",
-        });
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Failed to archive employee. Please try again.",
-          variant: "destructive",
-        });
-        throw error;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [toast]
-  );
+      const res  = await authFetch(`/api/employees?${params.toString()}`);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? "Failed to fetch employees");
 
-  const restoreEmployee = useCallback(
-    async (id: string) => {
-      setIsLoading(true);
-      try {
-        await new Promise((resolve) => setTimeout(resolve, 400));
-        setEmployees((prev) =>
-          prev.map((emp) =>
-            emp.id === id ? { ...emp, archived: false, archived_at: null } : emp
-          )
-        );
-        toast({
-          title: "Employee Restored",
-          description: "Employee has been restored to the directory.",
-        });
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Failed to restore employee. Please try again.",
-          variant: "destructive",
-        });
-        throw error;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [toast]
-  );
+      const payload: PaginatedResponse<Employee> = body.data;
+      setEmployees(payload.data);
+      setPagination({ current_page: payload.current_page, last_page: payload.last_page, per_page: payload.per_page, total: payload.total });
+    } catch (err) { handleError(err); }
+    finally { setIsLoading(false); }
+  }, []);
 
-  const purgeEmployee = useCallback(
-    async (id: string) => {
-      // Permanently remove employee
-      setIsLoading(true);
-      try {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        setEmployees((prev) => prev.filter((emp) => emp.id !== id));
-        toast({
-          title: "Employee Permanently Deleted",
-          description: "Employee record has been removed permanently.",
-        });
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Failed to delete employee. Please try again.",
-          variant: "destructive",
-        });
-        throw error;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [toast]
-  );
+  const fetchArchivedEmployees = useCallback(async (search?: string) => {
+    setIsLoading(true); setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (search) params.append("search", search);
+      const res  = await authFetch(`/api/employees/archived?${params.toString()}`);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? "Failed to fetch archived employees");
+      setArchivedEmployees(body.data?.data ?? body.data ?? []);
+    } catch (err) { handleError(err); }
+    finally { setIsLoading(false); }
+  }, []);
 
-  const getEmployeeById = useCallback(
-    (id: string) => {
-      return employees.find((emp) => emp.id === id);
-    },
-    [employees]
-  );
+  const fetchEmployee = useCallback(async (id: number) => {
+    setIsLoading(true); setError(null);
+    try {
+      const res  = await authFetch(`/api/employees/${id}`);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? "Failed to fetch employee");
+      setSelectedEmployee(body.data);
+    } catch (err) { handleError(err); }
+    finally { setIsLoading(false); }
+  }, []);
+
+  // ─── Create ────────────────────────────────────────────────────────────────
+
+  const createEmployee = useCallback(async (data: EmployeeFormData): Promise<Employee> => {
+    setIsLoading(true); setError(null);
+    try {
+      const res  = await authFetch("/api/employees", { method: "POST", body: JSON.stringify(data) });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? "Failed to create employee");
+      setEmployees((prev) => [body.data, ...prev]);
+      return body.data as Employee;
+    } catch (err) { handleError(err); throw err; }
+    finally { setIsLoading(false); }
+  }, []);
+
+  // Alias for pages that use addEmployee
+  const addEmployee = createEmployee;
+
+  // ─── Update ────────────────────────────────────────────────────────────────
+
+  const updateEmployee = useCallback(async (id: number, data: EmployeeFormData): Promise<Employee> => {
+    setIsLoading(true); setError(null);
+    try {
+      const res  = await authFetch(`/api/employees/${id}`, { method: "PUT", body: JSON.stringify(data) });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? "Failed to update employee");
+      setEmployees((prev) => prev.map((e) => (e.id === id ? body.data : e)));
+      if (selectedEmployee?.id === id) setSelectedEmployee(body.data);
+      return body.data as Employee;
+    } catch (err) { handleError(err); throw err; }
+    finally { setIsLoading(false); }
+  }, [selectedEmployee]);
+
+  const updateStatus = useCallback(async (id: number, status: Employee["status"], endDate?: string) => {
+    setIsLoading(true); setError(null);
+    try {
+      const res  = await authFetch(`/api/employees/${id}/status`, { method: "PATCH", body: JSON.stringify({ status, end_date: endDate }) });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? "Failed to update status");
+      setEmployees((prev) => prev.map((e) => (e.id === id ? body.data : e)));
+    } catch (err) { handleError(err); throw err; }
+    finally { setIsLoading(false); }
+  }, []);
+
+  // ─── Archive / Restore / Purge ─────────────────────────────────────────────
+
+  const archiveEmployee = useCallback(async (id: number) => {
+    setIsLoading(true); setError(null);
+    try {
+      const res  = await authFetch(`/api/employees/${id}`, { method: "DELETE" });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? "Failed to archive employee");
+      setEmployees((prev) => prev.filter((e) => e.id !== id));
+    } catch (err) { handleError(err); throw err; }
+    finally { setIsLoading(false); }
+  }, []);
+
+  // Alias for pages that use deleteEmployee
+  const deleteEmployee = archiveEmployee;
+
+  const purgeEmployee = useCallback(async (id: number) => {
+    // Hard delete — permanently removes from DB (admin only)
+    setIsLoading(true); setError(null);
+    try {
+      const res  = await authFetch(`/api/employees/${id}/purge`, { method: "DELETE" });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? "Failed to permanently delete employee");
+      setArchivedEmployees((prev) => prev.filter((e) => e.id !== id));
+    } catch (err) { handleError(err); throw err; }
+    finally { setIsLoading(false); }
+  }, []);
+
+  const restoreEmployee = useCallback(async (id: number) => {
+    setIsLoading(true); setError(null);
+    try {
+      const res  = await authFetch(`/api/employees/${id}/restore`, { method: "POST" });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? "Failed to restore employee");
+      setArchivedEmployees((prev) => prev.filter((e) => e.id !== id));
+    } catch (err) { handleError(err); throw err; }
+    finally { setIsLoading(false); }
+  }, []);
+
+  const clearSelectedEmployee = useCallback(() => setSelectedEmployee(null), []);
+  const clearError             = useCallback(() => setError(null), []);
 
   return {
     employees,
+    archivedEmployees,
+    selectedEmployee,
+    pagination,
     isLoading,
+    error,
+    fetchEmployees,
+    fetchArchivedEmployees,
+    fetchEmployee,
     addEmployee,
+    createEmployee,
     updateEmployee,
+    updateStatus,
     deleteEmployee,
-    restoreEmployee,
+    archiveEmployee,
     purgeEmployee,
-    getEmployeeById,
+    restoreEmployee,
+    clearSelectedEmployee,
+    clearError,
   };
 }

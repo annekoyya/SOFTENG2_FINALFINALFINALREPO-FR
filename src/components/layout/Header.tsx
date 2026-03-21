@@ -1,93 +1,44 @@
-import { Bell, Search, User } from "lucide-react";
-import { Input } from "@/components/ui/input";
+// src/components/layout/Header.tsx
+import { Bell, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { useAuth } from "@/hooks/useAuth";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 export function Header() {
+  const { user } = useAuth();
+
+  const initials = user?.name
+    ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+    : "?";
+
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card/80 px-6 backdrop-blur-sm">
+    <header className="flex h-16 items-center justify-between border-b border-border bg-card px-6">
       {/* Search */}
-      <div className="relative w-96">
+      <div className="relative w-64">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search employees, records, reports..."
-          className="pl-10 bg-background/50 border-muted focus:border-primary"
-        />
+        <Input placeholder="Search..." className="pl-9 h-9" />
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-4">
-        {/* Notifications */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
-              <Badge className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 text-xs flex items-center justify-center bg-secondary text-secondary-foreground">
-                3
-              </Badge>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80">
-            <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-              <span className="font-medium">New leave request</span>
-              <span className="text-sm text-muted-foreground">
-                Maria Santos requested 3 days leave
-              </span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-              <span className="font-medium">Payroll ready for review</span>
-              <span className="text-sm text-muted-foreground">
-                January 2026 payroll is ready for approval
-              </span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-              <span className="font-medium">Performance review due</span>
-              <span className="text-sm text-muted-foreground">
-                5 employees need quarterly review
-              </span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      {/* Right side */}
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="sm" className="relative h-9 w-9 p-0">
+          <Bell className="h-4 w-4" />
+        </Button>
 
-        {/* User Menu */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center gap-3 pl-2 pr-4">
-              <Avatar className="h-8 w-8">
-                <AvatarImage src="" />
-                <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-                  HR
-                </AvatarFallback>
-              </Avatar>
-              <div className="hidden md:block text-left">
-                <p className="text-sm font-medium">HR Admin</p>
-                <p className="text-xs text-muted-foreground">Administrator</p>
-              </div>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>My Account</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <User className="mr-2 h-4 w-4" />
-              Profile
-            </DropdownMenuItem>
-            <DropdownMenuItem>Settings</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">Sign Out</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-2">
+          <Avatar className="h-8 w-8">
+            <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+          {user && (
+            <div className="hidden sm:block">
+              <p className="text-sm font-medium text-foreground leading-none">{user.name}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{user.role}</p>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

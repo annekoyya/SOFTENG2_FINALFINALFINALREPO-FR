@@ -2,47 +2,106 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
+
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
     protected $fillable = [
         'name',
         'email',
         'password',
+        'role', // Employee, HR, Manager, Accountant, Admin
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed',
+            'password'          => 'hashed',
         ];
+    }
+
+    // ─── Role Helpers ─────────────────────────────────────────────────────────
+
+    public function isAdmin(): bool
+    {
+        return $this->role === 'Admin';
+    }
+
+    public function isHR(): bool
+    {
+        return $this->role === 'HR';
+    }
+
+    public function isManager(): bool
+    {
+        return $this->role === 'Manager';
+    }
+
+    public function isAccountant(): bool
+    {
+        return $this->role === 'Accountant';
+    }
+
+    /**
+     * Check if user can approve leave requests (HR, Manager, Admin).
+     */
+    public function canApproveLeave(): bool
+    {
+        return in_array($this->role, ['Admin', 'HR', 'Manager']);
+    }
+
+    /**
+     * Check if user can manage payroll (Accountant, Admin).
+     */
+    public function canManagePayroll(): bool
+    {
+        return in_array($this->role, ['Admin', 'Accountant']);
+    }
+
+    // ─── Relationships ────────────────────────────────────────────────────────
+
+    /**
+     * Attendance records recorded by this user.
+     */
+    public function recordedAttendances(): HasMany
+    {
+        return $this->hasMany(Attendance::class, 'recorded_by');
+    }
+
+    /**
+     * Leave requests approved/rejected by this user.
+     */
+    public function approvedLeaveRequests(): HasMany
+    {
+        return $this->hasMany(LeaveRequest::class, 'approver_id');
+    }
+
+    /**
+     * Payrolls created by this user.
+     */
+    public function createdPayrolls(): HasMany
+    {
+        return $this->hasMany(Payroll::class, 'created_by');
+    }
+
+    /**
+     * Payrolls approved by this user.
+     */
+    public function approvedPayrolls(): HasMany
+    {
+        return $this->hasMany(Payroll::class, 'approved_by');
     }
 }

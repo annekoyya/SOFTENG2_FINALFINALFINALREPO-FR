@@ -24,47 +24,39 @@ class LeaveRequest extends Model
     ];
 
     protected $casts = [
-        'start_date' => 'date',
-        'end_date' => 'date',
-        'approved_at' => 'datetime',
-        'number_of_days' => 'integer',
+        'start_date'      => 'date',
+        'end_date'        => 'date',
+        'approved_at'     => 'datetime',
+        'number_of_days'  => 'integer',
         'hours_requested' => 'decimal:2',
     ];
 
-    /**
-     * Get the employee associated with this leave request.
-     */
+    // ─── Relationships ────────────────────────────────────────────────────────
+
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
     }
 
-    /**
-     * Get the user who approved this leave request.
-     */
     public function approver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approver_id');
     }
 
-    /**
-     * Scope to get pending leave requests.
-     */
+    // ─── Scopes ───────────────────────────────────────────────────────────────
+
     public function scopePending($query)
     {
         return $query->where('status', 'pending');
     }
 
-    /**
-     * Scope to get approved leave requests.
-     */
     public function scopeApproved($query)
     {
         return $query->where('status', 'approved');
     }
 
     /**
-     * Scope to get leave requests for a date range.
+     * Overlapping date range query — catches all leave that touches the given window.
      */
     public function scopeForDateRange($query, $startDate, $endDate)
     {
@@ -78,77 +70,74 @@ class LeaveRequest extends Model
         });
     }
 
-    /**
-     * Check if leave request can be approved.
-     */
+    // ─── State Checks ─────────────────────────────────────────────────────────
+
     public function canApprove(): bool
     {
         return $this->status === 'pending';
     }
 
-    /**
-     * Check if leave request can be rejected.
-     */
     public function canReject(): bool
     {
         return $this->status === 'pending';
     }
 
-    /**
-     * Approve the leave request.
-     */
+    public function canCancel(): bool
+    {
+        return in_array($this->status, ['pending', 'approved']);
+    }
+
+    // ─── Actions ──────────────────────────────────────────────────────────────
+
     public function approve(int $approverId, string $reason = ''): void
     {
         if (!$this->canApprove()) {
-            throw new \Exception('This leave request cannot be approved');
+            throw new \Exception('This leave request cannot be approved.');
         }
 
         $this->update([
-            'status' => 'approved',
-            'approver_id' => $approverId,
-            'approved_at' => now(),
+            'status'          => 'approved',
+            'approver_id'     => $approverId,
+            'approved_at'     => now(),
             'approval_reason' => $reason,
         ]);
     }
 
-    /**
-     * Reject the leave request.
-     */
     public function reject(int $approverId, string $reason): void
     {
         if (!$this->canReject()) {
-            throw new \Exception('This leave request cannot be rejected');
+            throw new \Exception('This leave request cannot be rejected.');
         }
 
         $this->update([
-            'status' => 'rejected',
-            'approver_id' => $approverId,
-            'approved_at' => now(),
+            'status'          => 'rejected',
+            'approver_id'     => $approverId,
+            'approved_at'     => now(),
             'approval_reason' => $reason,
         ]);
     }
 
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+
     /**
-     * Check if a date falls within the leave period.
+     * Check if a given date falls within this approved leave period.
      */
     public function isDateInLeave($date): bool
     {
-        return $date->between($this->start_date, $this->end_date) && $this->status === 'approved';
+        return $this->status === 'approved'
+            && $date->between($this->start_date, $this->end_date);
     }
 
-    /**
-     * Get leave type label.
-     */
     public function getLeaveTypeLabel(): string
     {
         return match ($this->leave_type) {
-            'vacation' => 'Vacation',
-            'sick' => 'Sick Leave',
+            'vacation'  => 'Vacation',
+            'sick'      => 'Sick Leave',
             'emergency' => 'Emergency Leave',
-            'unpaid' => 'Unpaid Leave',
+            'unpaid'    => 'Unpaid Leave',
             'maternity' => 'Maternity Leave',
             'paternity' => 'Paternity Leave',
-            default => 'Leave',
+            default     => 'Leave',
         };
     }
 }

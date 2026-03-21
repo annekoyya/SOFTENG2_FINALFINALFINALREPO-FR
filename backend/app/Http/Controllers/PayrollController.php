@@ -8,58 +8,49 @@ use App\Services\PayrollService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
 
 class PayrollController extends Controller
 {
-    private PayrollService $payrollService;
+    public function __construct(private PayrollService $payrollService) {}
 
-    public function __construct(PayrollService $payrollService)
-    {
-        $this->payrollService = $payrollService;
-    }
+    // ─── Read ─────────────────────────────────────────────────────────────────
 
     /**
-     * Get payroll summary for dashboard.
+     * Payroll summary for the dashboard.
+     * GET /api/payrolls/summary
      */
     public function getSummary(Request $request): JsonResponse
     {
-        $year = $request->query('year', now()->year);
-        $month = $request->query('month', now()->month);
+        $year  = (int) $request->query('year', now()->year);
+        $month = (int) $request->query('month', now()->month);
 
         $summary = $this->payrollService->getMonthlyPayrollSummary($year, $month);
 
-        return response()->json([
-            'success' => true,
-            'data' => $summary,
-        ]);
+        return $this->success($summary);
     }
 
     /**
-     * Get all payrolls with filters.
+     * List all payrolls with filters.
+     * GET /api/payrolls
      */
     public function index(Request $request): JsonResponse
     {
         $query = Payroll::with(['employee', 'creator', 'approver']);
 
-        // Filter by status
-        if ($request->has('status')) {
-            $query->where('status', $request->query('status'));
+        if ($request->filled('status')) {
+            $query->byStatus($request->query('status'));
         }
 
-        // Filter by month/year
-        if ($request->has('month') && $request->has('year')) {
-            $month = $request->query('month');
-            $year = $request->query('year');
-            $query->forMonth($year, $month);
+        if ($request->filled('month') && $request->filled('year')) {
+            $query->forMonth((int) $request->query('year'), (int) $request->query('month'));
         }
 
-        // Filter by employee
-        if ($request->has('employee_id')) {
+        if ($request->filled('employee_id')) {
             $query->where('employee_id', $request->query('employee_id'));
         }
 
-        // Search by employee name
-        if ($request->has('search')) {
+        if ($request->filled('search')) {
             $search = $request->query('search');
             $query->whereHas('employee', function ($q) use ($search) {
                 $q->where('first_name', 'like', "%{$search}%")
@@ -69,256 +60,204 @@ class PayrollController extends Controller
 
         $payrolls = $query->orderBy('created_at', 'desc')->paginate(20);
 
-        return response()->json([
-            'success' => true,
-            'data' => $payrolls,
-        ]);
+        return $this->success($payrolls);
     }
 
     /**
-     * Get a specific payroll record.
+     * Show a single payroll record.
+     * GET /api/payrolls/{payroll}
      */
     public function show(Payroll $payroll): JsonResponse
     {
-        return response()->json([
-            'success' => true,
-            'data' => $payroll->load(['employee', 'creator', 'approver']),
-        ]);
+        return $this->success($payroll->load(['employee', 'creator', 'approver']));
     }
 
+    // ─── Create & Edit ────────────────────────────────────────────────────────
+
     /**
-     * Calculate and create a payroll record.
+     * Calculate and create a payroll record (creates as draft).
+     * POST /api/payrolls/calculate
      */
     public function calculate(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'employee_id' => 'required|exists:employees,id',
+            'employee_id'      => 'required|exists:employees,id',
             'pay_period_start' => 'required|date',
-            'pay_period_end' => 'required|date',
+            'pay_period_end'   => 'required|date|after_or_equal:pay_period_start',
         ]);
 
-        $employee = Employee::findOrFail($validated['employee_id']);
+        $employee    = Employee::findOrFail($validated['employee_id']);
         $periodStart = Carbon::parse($validated['pay_period_start']);
-        $periodEnd = Carbon::parse($validated['pay_period_end']);
+        $periodEnd   = Carbon::parse($validated['pay_period_end']);
 
-        // Check if payroll already exists for this period
+        // Prevent duplicate payroll for the same period
         $existing = Payroll::where('employee_id', $employee->id)
-            ->where('pay_period_start', $periodStart)
-            ->where('pay_period_end', $periodEnd)
+            ->where('pay_period_start', $periodStart->toDateString())
+            ->where('pay_period_end', $periodEnd->toDateString())
             ->first();
 
         if ($existing) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Payroll for this period already exists.',
-                'data' => $existing,
-            ], 409);
+            return $this->error(
+                'Payroll for this period already exists.',
+                409,
+                ['existing_payroll_id' => $existing->id]
+            );
         }
 
-        // Calculate payroll
-        // $calculation = $this->payrollService->calculatePayroll($employee, $periodStart, $periodEnd);
+        $calculation = $this->payrollService->calculatePayroll($employee, $periodStart, $periodEnd);
 
-        // Create payroll record
-        // $payroll = Payroll::create([
-        //     'employee_id' => $employee->id,
-        //     'pay_period_start' => $periodStart,
-        //     'pay_period_end' => $periodEnd,
-        //     'base_salary' => $calculation['base_salary'],
-        //     'overtime_pay' => $calculation['overtime_pay'],
-        //     'bonuses' => $calculation['bonuses'],
-        //     'allowances' => $calculation['allowances'],
-        //     'gross_salary' => $calculation['gross_salary'],
-        //     'sss_contribution' => $calculation['deductions']['sss_contribution'],
-        //     'philhealth_contribution' => $calculation['deductions']['philhealth_contribution'],
-        //     'pagibig_contribution' => $calculation['deductions']['pagibig_contribution'],
-        //     'tax_withholding' => $calculation['deductions']['tax_withholding'],
-        //     'other_deductions' => $calculation['deductions']['other_deductions'],
-        //     'total_deductions' => $calculation['total_deductions'],
-        //     'net_salary' => $calculation['net_salary'],
-        //     'calculation_breakdown' => $calculation['calculation_breakdown'],
-        //     'status' => 'draft',
-        //     // 'created_by' => auth()->id(),
-        // ]);
+        $payroll = Payroll::create([
+            'employee_id'             => $employee->id,
+            'pay_period_start'        => $periodStart->toDateString(),
+            'pay_period_end'          => $periodEnd->toDateString(),
+            'base_salary'             => $calculation['base_salary'],
+            'overtime_pay'            => $calculation['overtime_pay'],
+            'bonuses'                 => $calculation['bonuses'],
+            'allowances'              => $calculation['allowances'],
+            'gross_salary'            => $calculation['gross_salary'],
+            'sss_contribution'        => $calculation['deductions']['sss_contribution'],
+            'philhealth_contribution' => $calculation['deductions']['philhealth_contribution'],
+            'pagibig_contribution'    => $calculation['deductions']['pagibig_contribution'],
+            'tax_withholding'         => $calculation['deductions']['tax_withholding'],
+            'other_deductions'        => $calculation['deductions']['other_deductions'],
+            'total_deductions'        => $calculation['total_deductions'],
+            'net_salary'              => $calculation['net_salary'],
+            'calculation_breakdown'   => $calculation['calculation_breakdown'],
+            'status'                  => 'draft',
+            'created_by'              => Auth::id(),
+        ]);
 
-    //     return response()->json([
-    //         'success' => true,
-    //         'message' => 'Payroll calculated successfully.',
-    //         'data' => $payroll,
-    //     ], 201);
-    // }
+        return $this->created($payroll->load('employee'), 'Payroll calculated successfully');
+    }
 
     /**
-     * Update a payroll record (only if draft/pending).
+     * Update a draft or pending payroll (adjustments, bonuses, etc.).
+     * PATCH /api/payrolls/{payroll}
      */
-    // public function update(Request $request, Payroll $payroll): JsonResponse
-    // {
-    //     if (!$payroll->canEdit()) {
-    //         return response()->json([
-    //             'success' => false,
-    //             'message' => 'This payroll cannot be edited in its current status.',
-    //         ], 422);
-    //     }
+    public function update(Request $request, Payroll $payroll): JsonResponse
+    {
+        if (!$payroll->canEdit()) {
+            return $this->error('This payroll cannot be edited in its current status.');
+        }
 
-    //     $validated = $request->validate([
-    //         'overtime_pay' => 'sometimes|numeric|min:0',
-    //         'bonuses' => 'sometimes|numeric|min:0',
-    //         'allowances' => 'sometimes|numeric|min:0',
-    //         'other_deductions' => 'sometimes|numeric|min:0',
-    //         'notes' => 'sometimes|string',
-    //     ]);
+        $validated = $request->validate([
+            'overtime_pay'    => 'sometimes|numeric|min:0',
+            'bonuses'         => 'sometimes|numeric|min:0',
+            'allowances'      => 'sometimes|numeric|min:0',
+            'other_deductions'=> 'sometimes|numeric|min:0',
+            'notes'           => 'sometimes|nullable|string|max:1000',
+        ]);
 
-    //     // Update values
-    //     $payroll->fill($validated);
+        $payroll->fill($validated);
+        $payroll->recalculate(); // Uses the model method to recompute gross + net
+        $payroll->save();
 
-    //     // Recalculate totals
-    //     $payroll->gross_salary = $payroll->base_salary + $payroll->overtime_pay + $payroll->bonuses + $payroll->allowances;
-    //     $payroll->total_deductions = $payroll->sss_contribution + $payroll->philhealth_contribution + 
-    //                                  $payroll->pagibig_contribution + $payroll->tax_withholding + $payroll->other_deductions;
-    //     $payroll->recalculateNetSalary();
-        
-    //     $payroll->save();
+        return $this->success($payroll, 'Payroll updated successfully');
+    }
 
-    //     return response()->json([
-    //         'success' => true,
-    //         'message' => 'Payroll updated successfully.',
-    //         'data' => $payroll,
-    //     ]);
-    // }
+    // ─── Workflow Actions ─────────────────────────────────────────────────────
 
     /**
-     * Submit payroll for approval.
+     * Submit a draft payroll for approval.
+     * POST /api/payrolls/{payroll}/submit
      */
     public function submitForApproval(Payroll $payroll): JsonResponse
     {
-        if ($payroll->status !== 'draft') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only draft payrolls can be submitted for approval.',
-            ], 422);
+        if (!$payroll->canSubmit()) {
+            return $this->error('Only draft payrolls can be submitted for approval.');
         }
 
         $payroll->update(['status' => 'pending_approval']);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Payroll submitted for approval.',
-            'data' => $payroll,
-        ]);
+        return $this->success($payroll, 'Payroll submitted for approval');
     }
 
     /**
-     * Approve a payroll record.
+     * Approve a pending payroll.
+     * POST /api/payrolls/{payroll}/approve
      */
     public function approve(Payroll $payroll): JsonResponse
     {
         if (!$payroll->canApprove()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only pending payrolls can be approved.',
-            ], 422);
+            return $this->error('Only pending payrolls can be approved.');
         }
 
-        // $payroll->update([
-        //     'status' => 'approved',
-        //     'approved_by' => auth()->id(),
-        //     'approved_at' => now(),
-        // ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Payroll approved successfully.',
-            'data' => $payroll,
+        $payroll->update([
+            'status'      => 'approved',
+            'approved_by' => Auth::id(),
+            'approved_at' => now(),
         ]);
+
+        return $this->success($payroll->fresh(['approver']), 'Payroll approved successfully');
     }
 
     /**
-     * Reject a payroll record.
+     * Reject a pending payroll and return it to draft.
+     * POST /api/payrolls/{payroll}/reject
      */
     public function reject(Request $request, Payroll $payroll): JsonResponse
     {
         if ($payroll->status !== 'pending_approval') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only pending payrolls can be rejected.',
-            ], 422);
+            return $this->error('Only pending payrolls can be rejected.');
         }
 
-        $validated = $request->validate(['reason' => 'required|string']);
+        $validated = $request->validate(['reason' => 'required|string|max:500']);
 
         $payroll->update([
             'status' => 'draft',
-            'notes' => $payroll->notes . "\n\nRejection reason: " . $validated['reason'],
+            'notes'  => trim($payroll->notes . "\n\nRejection reason: " . $validated['reason']),
         ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Payroll rejected and moved back to draft.',
-            'data' => $payroll,
-        ]);
+        return $this->success($payroll, 'Payroll rejected and moved back to draft');
     }
 
     /**
-     * Process an approved payroll (mark as processed).
+     * Process an approved payroll.
+     * POST /api/payrolls/{payroll}/process
      */
     public function process(Payroll $payroll): JsonResponse
     {
         if (!$payroll->canProcess()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only approved payrolls can be processed.',
-            ], 422);
+            return $this->error('Only approved payrolls can be processed.');
         }
 
         $payroll->update(['status' => 'processed']);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Payroll processed successfully.',
-            'data' => $payroll,
-        ]);
+        return $this->success($payroll, 'Payroll processed successfully');
     }
 
     /**
-     * Mark payroll as paid.
+     * Mark a processed payroll as paid.
+     * POST /api/payrolls/{payroll}/mark-paid
      */
     public function markAsPaid(Payroll $payroll): JsonResponse
     {
-        if ($payroll->status !== 'processed') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only processed payrolls can be marked as paid.',
-            ], 422);
+        if (!$payroll->canMarkPaid()) {
+            return $this->error('Only processed payrolls can be marked as paid.');
         }
 
         $payroll->update([
-            'status' => 'paid',
+            'status'  => 'paid',
             'paid_at' => now(),
         ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Payroll marked as paid.',
-            'data' => $payroll,
-        ]);
+        return $this->success($payroll, 'Payroll marked as paid');
     }
 
+    // ─── Delete ───────────────────────────────────────────────────────────────
+
     /**
-     * Delete a payroll record (only draft).
+     * Delete a draft payroll record.
+     * DELETE /api/payrolls/{payroll}
      */
     public function destroy(Payroll $payroll): JsonResponse
     {
         if ($payroll->status !== 'draft') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only draft payrolls can be deleted.',
-            ], 422);
+            return $this->error('Only draft payrolls can be deleted.');
         }
 
         $payroll->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Payroll deleted successfully.',
-        ]);
+        return $this->success(null, 'Payroll deleted successfully');
     }
 }

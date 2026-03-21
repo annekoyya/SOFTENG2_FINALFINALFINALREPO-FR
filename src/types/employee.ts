@@ -1,48 +1,72 @@
+// src/types/employee.ts
+// Single source of truth for the Employee type.
+// Matches the backend Employee model exactly.
+
 export interface Employee {
-  id: string;
-  employee_id: string;
+  id: number;
+  new_hire_id: number | null;
+  manager_id: number | null;
+  role: "Employee" | "HR" | "Manager" | "Accountant" | "Admin";
+  status: "active" | "on_leave" | "suspended" | "terminated";
   first_name: string;
   last_name: string;
-  email: string;
-  phone: string;
+  middle_name: string | null;
+  name_extension: string | null;
   date_of_birth: string;
-  gender: 'male' | 'female' | 'other';
-  address: string;
-  city: string;
-  province: string;
-  zip_code: string;
-  department_id: string;
-  department_name: string;
-  position: string;
-  employment_type: 'full-time' | 'part-time' | 'contract' | 'intern';
-  hire_date: string;
-  salary: number;
-  status: 'active' | 'on_leave' | 'terminated' | 'suspended';
-  photo_url?: string;
-  emergency_contact_name?: string;
-  emergency_contact_phone?: string;
-  documents?: EmployeeDocument[];
+  email: string;
+  phone_number: string;
+  home_address: string;
+  emergency_contact_name: string;
+  emergency_contact_number: string;
+  relationship: string;
+  tin: string | null;
+  sss_number: string | null;
+  pagibig_number: string | null;
+  philhealth_number: string | null;
+  bank_name: string | null;
+  account_name: string | null;
+  account_number: string | null;
+  start_date: string;
+  end_date: string | null;
+  department: string;
+  job_category: string;
+  employment_type: "regular" | "probationary" | "contractual" | "part_time" | "intern";
+  reporting_manager: string | null;
+  basic_salary: string;
+  photo_path: string | null;
+  full_name?: string;
+  // Soft delete — null = active, string timestamp = archived
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
-  archived?: boolean;
-  archived_at?: string | null;
 }
 
-export interface EmployeeDocument {
-  id: string;
-  employee_id: string;
-  name: string;
-  type: 'resume' | 'contract' | 'id' | 'certificate' | 'other';
-  file_url: string;
-  uploaded_at: string;
+export interface EmployeeFormData {
+  first_name: string;
+  last_name: string;
+  middle_name?: string;
+  name_extension?: string;
+  date_of_birth: string;
+  email: string;
+  phone_number: string;
+  home_address: string;
+  emergency_contact_name: string;
+  emergency_contact_number: string;
+  relationship: string;
+  tin?: string;
+  sss_number?: string;
+  pagibig_number?: string;
+  philhealth_number?: string;
+  bank_name?: string;
+  account_name?: string;
+  account_number?: string;
+  start_date: string;
+  end_date?: string;
+  department: string;
+  job_category: string;
+  employment_type: Employee["employment_type"];
+  reporting_manager?: string;
+  basic_salary: number;
+  role?: Employee["role"];
+  manager_id?: number;
 }
-
-export interface Department {
-  id: string;
-  name: string;
-  code: string;
-  manager_id?: string;
-  description?: string;
-}
-
-export type EmployeeFormData = Omit<Employee, 'id' | 'created_at' | 'updated_at' | 'department_name' | 'documents'>;

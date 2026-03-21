@@ -1,3 +1,4 @@
+// src/components/layout/DashboardLayout.tsx
 import { ReactNode } from "react";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
@@ -8,11 +9,16 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex h-screen w-full overflow-hidden bg-background">
+      {/* Sidebar */}
       <Sidebar />
-      <div className="pl-64 transition-all duration-300">
+
+      {/* Main content area */}
+      <div className="flex flex-1 flex-col overflow-hidden">
         <Header />
-        <main className="p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-6">
+          {children}
+        </main>
       </div>
     </div>
   );

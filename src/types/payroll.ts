@@ -1,8 +1,11 @@
+// src/types/payroll.ts
+// Fix: id fields changed from string → number to match backend auto-increment PKs
+
 export interface Payroll {
-  id: string;
-  employee_id: string;
+  id: number;                // was string — backend returns integer
+  employee_id: number;       // was string — FK is integer
   employee?: {
-    id: string;
+    id: number;              // was string
     first_name: string;
     last_name: string;
     email: string;
@@ -40,8 +43,8 @@ export interface Payroll {
       other_deductions?: { label: string; amount: number };
     };
   };
-  created_by?: string;
-  approved_by?: string;
+  created_by?: number;
+  approved_by?: number;
   approved_at?: string;
   paid_at?: string;
   created_at: string;
@@ -54,5 +57,6 @@ export interface PayrollSummary {
   total_deductions: number;
   count: number;
   pending_approval: number;
+  paid: number;                        // was missing — added to match API
   statuses: Record<string, number>;
 }
