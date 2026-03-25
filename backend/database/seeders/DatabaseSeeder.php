@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             AdminSeeder::class,    // Default system users (admin, hr, accountant, etc.)
             EmployeeSeeder::class, // Realistic employee records + matching user accounts
+            NewHireSeeder::class,  // New hire onboarding records in various stages
         ]);
     }
 }

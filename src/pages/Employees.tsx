@@ -126,9 +126,8 @@ export default function Employees() {
             <Download className="mr-2 h-4 w-4" />
             Export
           </Button>
-          <Button onClick={() => setViewMode("add")}>
-            <UserPlus className="mr-2 h-4 w-4" />
-            Add Employee
+          <Button disabled>
+            <UserPlus className="mr-2 h-4 w-4" /> New Hire
           </Button>
         </div>
       </div>

@@ -5,23 +5,31 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import Dashboard from "./pages/Dashboard";
-import Employees from "./pages/Employees";
-import Attendance from "./pages/Attendance";
-import Payroll from "./pages/Payroll";
-import ArchivedEmployees from "./pages/ArchivedEmployees";
-import Login from "./pages/Login";
-import NotFound from "./pages/NotFound";
+
+// ── Existing pages ─────────────────────────────────────────────────────────────
+import Dashboard          from "./pages/Dashboard";
+import Employees          from "./pages/Employees";
+import Attendance         from "./pages/Attendance";
+import Accounting         from "./pages/Accounting";
+import Performance        from "./pages/Performance";
+import ArchivedEmployees  from "./pages/ArchivedEmployees";
+import Login              from "./pages/Login";
+import NotFound           from "./pages/NotFound";
+
+// ── New pages (copy files from the outputs folder into src/pages/) ─────────────
+import Recruitment        from "./pages/Recruitment";
+import Leave              from "./pages/Leave";
+import Overtime           from "./pages/Overtime";
+import HolidayCalendar    from "./pages/HolidayCalendar";
+import SalaryRevision     from "./pages/SalaryRevision";
 
 const queryClient = new QueryClient();
 
-// Protect routes — redirect to /login if not authenticated
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
-// Redirect to dashboard if already logged in
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
   return isAuthenticated ? <Navigate to="/" replace /> : <>{children}</>;
@@ -34,17 +42,25 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          {/* Public */}
+          {/* ── Public ──────────────────────────────────────────────────────── */}
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
 
-          {/* Protected */}
+          {/* ── Existing protected pages ─────────────────────────────────────── */}
           <Route path="/"                   element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/employees"          element={<PrivateRoute><Employees /></PrivateRoute>} />
           <Route path="/attendance"         element={<PrivateRoute><Attendance /></PrivateRoute>} />
-          <Route path="/payroll"            element={<PrivateRoute><Payroll /></PrivateRoute>} />
+          <Route path="/payroll"            element={<PrivateRoute><Accounting /></PrivateRoute>} />
+          <Route path="/performance"        element={<PrivateRoute><Performance /></PrivateRoute>} />
           <Route path="/archived-employees" element={<PrivateRoute><ArchivedEmployees /></PrivateRoute>} />
 
-          {/* 404 */}
+          {/* ── New protected pages ──────────────────────────────────────────── */}
+          <Route path="/recruitment"        element={<PrivateRoute><Recruitment /></PrivateRoute>} />
+          <Route path="/leave"              element={<PrivateRoute><Leave /></PrivateRoute>} />
+          <Route path="/overtime"           element={<PrivateRoute><Overtime /></PrivateRoute>} />
+          <Route path="/holidays"           element={<PrivateRoute><HolidayCalendar /></PrivateRoute>} />
+          <Route path="/salary-revisions"   element={<PrivateRoute><SalaryRevision /></PrivateRoute>} />
+
+          {/* ── 404 ─────────────────────────────────────────────────────────── */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
