@@ -16,6 +16,9 @@ import {
   Timer,
   CalendarDays,
   TrendingUp,
+  BookOpen,
+  AlertCircle,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -47,6 +50,9 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Overtime",           path: "/overtime",           icon: Timer },
   { label: "Holidays",           path: "/holidays",           icon: CalendarDays,   roles: ["Admin", "HR Manager"] },
   { label: "Salary history",     path: "/salary-revisions",   icon: TrendingUp,     roles: ["Admin", "HR Manager"] },
+  { label: "Training",           path: "/training",           icon: BookOpen,       roles: ["Admin", "HR Manager"] },
+  { label: "Year-end tax",       path: "/year-end-tax",       icon: AlertCircle,    roles: ["Admin", "Accountant", "HR Manager"] },
+  { label: "Shift management",   path: "/shifts",             icon: Settings,       roles: ["Admin", "Manager", "HR Manager"] },
 
   // ── Admin ─────────────────────────────────────────────────────────────────
   { label: "Archived employees", path: "/archived-employees", icon: Archive,        roles: ["Admin", "HR Manager"],              divider: true },

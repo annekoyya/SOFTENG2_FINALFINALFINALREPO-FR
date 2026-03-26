@@ -22,6 +22,9 @@ import Leave              from "./pages/Leave";
 import Overtime           from "./pages/Overtime";
 import HolidayCalendar    from "./pages/HolidayCalendar";
 import SalaryRevision     from "./pages/SalaryRevision";
+import TrainingModule     from "./pages/TrainingModule";
+import YearEndTax         from "./pages/YearEndTax";
+import ShiftManagement    from "./pages/ShiftManagement";
 
 const queryClient = new QueryClient();
 
@@ -59,6 +62,9 @@ const App = () => (
           <Route path="/overtime"           element={<PrivateRoute><Overtime /></PrivateRoute>} />
           <Route path="/holidays"           element={<PrivateRoute><HolidayCalendar /></PrivateRoute>} />
           <Route path="/salary-revisions"   element={<PrivateRoute><SalaryRevision /></PrivateRoute>} />
+          <Route path="/training"           element={<PrivateRoute><TrainingModule /></PrivateRoute>} />
+          <Route path="/year-end-tax"       element={<PrivateRoute><YearEndTax /></PrivateRoute>} />
+          <Route path="/shifts"             element={<PrivateRoute><ShiftManagement /></PrivateRoute>} />
 
           {/* ── 404 ─────────────────────────────────────────────────────────── */}
           <Route path="*" element={<NotFound />} />

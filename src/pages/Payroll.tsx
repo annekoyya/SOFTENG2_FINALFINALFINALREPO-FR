@@ -35,7 +35,6 @@ export default function Payroll() {
     fetchPayrolls,
     fetchSummary,
     calculatePayroll,
-    submitForApproval,
     approvePayroll,
     rejectPayroll,
     processPayroll,

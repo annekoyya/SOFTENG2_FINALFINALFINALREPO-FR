@@ -11,6 +11,7 @@ import { ClockInWidget } from "@/components/attendance/ClockInWidget";
 import { LiveDashboard } from "@/components/attendance/LiveDashboard";
 import { AttendanceHistory } from "@/components/attendance/AttendanceHistory";
 import { LeaveRequestPortal } from "@/components/attendance/LeaveRequestPortal";
+import AttendanceImport from "@/components/attendance/AttendanceImport";
 import { useToast } from "@/hooks/use-toast";
 import { useAttendance } from "@/hooks/useAttendance";
 import { useAuth } from "@/hooks/useAuth";
@@ -25,8 +26,6 @@ export default function Attendance() {
     isLoading: isLoadingStatus,
     fetchLiveStatus,
     fetchAttendance,
-    clockIn,
-    clockOut,
     createLeaveRequest,
     fetchLeaveRequests,
     approveLeaveRequest,
@@ -78,11 +77,12 @@ export default function Attendance() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className={`grid w-full ${canSeeFullDashboard ? "grid-cols-5" : "grid-cols-4"}`}>
           <TabsTrigger value="dashboard">Live Dashboard</TabsTrigger>
           <TabsTrigger value="clock">Clock In/Out</TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
           <TabsTrigger value="leave">Leave Requests</TabsTrigger>
+          {canSeeFullDashboard && <TabsTrigger value="import">Import</TabsTrigger>}
         </TabsList>
 
         {/* Live Dashboard Tab */}
@@ -201,6 +201,13 @@ export default function Attendance() {
             onReject={rejectLeaveRequest}
           />
         </TabsContent>
+
+        {/* Import Tab - Admin/HR only */}
+        {canSeeFullDashboard && (
+          <TabsContent value="import">
+            <AttendanceImport />
+          </TabsContent>
+        )}
       </Tabs>
     </DashboardLayout>
   );

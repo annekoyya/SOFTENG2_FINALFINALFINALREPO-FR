@@ -12,6 +12,7 @@ import { PayslipTable } from "@/components/accounting/PayslipTable";
 import { PayslipDrawer } from "@/components/accounting/PayslipDrawer";
 import { PayrollSummaryTab } from "@/components/accounting/PayrollSummaryTab";
 import { AuditTrailTab } from "@/components/accounting/AuditTrailTab";
+import AccountantPayslipFlow from "@/components/accounting/AccountantPayslipFlow";
 import {
   Plus, Play, Mail, Download, Loader2,
   CalendarDays, Users, TrendingUp, FileText,
@@ -28,7 +29,7 @@ const statusStyles: Record<string, string> = {
 
 export default function Accounting() {
   const { toast }              = useToast();
-  useAuth();  // Ensure user is authenticated
+  const { user }               = useAuth();  // Ensure user is authenticated
   const {
     periods, payslips, selectedPayslip, summary, auditLogs, isLoading,
     fetchPeriods, generateNextPeriod,
@@ -206,42 +207,48 @@ export default function Accounting() {
         </div>
       )}
 
-      {/* Main Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="payslips">Payslips</TabsTrigger>
-          <TabsTrigger value="summary">Summary</TabsTrigger>
-          <TabsTrigger value="audit">Audit Trail</TabsTrigger>
-        </TabsList>
+      {/* Main Section - Accountant Flow or Regular Tabs */}
+      {user?.role === "Accountant" ? (
+        <div className="mt-6">
+          <AccountantPayslipFlow periods={periods as any} onRefreshPeriods={fetchPeriods} />
+        </div>
+      ) : (
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="payslips">Payslips</TabsTrigger>
+            <TabsTrigger value="summary">Summary</TabsTrigger>
+            <TabsTrigger value="audit">Audit Trail</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="payslips" className="mt-6">
-          <PayslipTable
-            payslips={payslips}
-            isLoading={isLoading}
-            onView={handleViewPayslip}
-            onApprove={async (id) => {
-              await approvePayslip(id);
-              toast({ title: "Approved", description: "Payslip approved." });
-            }}
-            onMarkPaid={async (id) => {
-              await markPaid(id);
-              toast({ title: "Paid", description: "Payslip marked as paid." });
-            }}
-            onSendEmail={async (id) => {
-              const msg = await sendEmail(id);
-              toast({ title: "Email Sent", description: msg });
-            }}
-          />
-        </TabsContent>
+          <TabsContent value="payslips" className="mt-6">
+            <PayslipTable
+              payslips={payslips}
+              isLoading={isLoading}
+              onView={handleViewPayslip}
+              onApprove={async (id) => {
+                await approvePayslip(id);
+                toast({ title: "Approved", description: "Payslip approved." });
+              }}
+              onMarkPaid={async (id) => {
+                await markPaid(id);
+                toast({ title: "Paid", description: "Payslip marked as paid." });
+              }}
+              onSendEmail={async (id) => {
+                const msg = await sendEmail(id);
+                toast({ title: "Email Sent", description: msg });
+              }}
+            />
+          </TabsContent>
 
-        <TabsContent value="summary" className="mt-6">
-          <PayrollSummaryTab summary={summary} isLoading={isLoading} />
-        </TabsContent>
+          <TabsContent value="summary" className="mt-6">
+            <PayrollSummaryTab summary={summary} isLoading={isLoading} />
+          </TabsContent>
 
-        <TabsContent value="audit" className="mt-6">
-          <AuditTrailTab logs={auditLogs} isLoading={isLoading} />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="audit" className="mt-6">
+            <AuditTrailTab logs={auditLogs} isLoading={isLoading} />
+          </TabsContent>
+        </Tabs>
+      )}
 
       {/* Payslip Detail Drawer */}
       <PayslipDrawer

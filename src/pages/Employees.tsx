@@ -1,11 +1,14 @@
 // src/pages/Employees.tsx
 import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmployeeTable } from "@/components/employees/EmployeeTable";
 import { EmployeeForm } from "@/components/employees/EmployeeForm";
 import { EmployeeDetails } from "@/components/employees/EmployeeDetails";
 import { DeleteEmployeeDialog } from "@/components/employees/DeleteEmployeeDialog";
+import NewHireTab from "@/components/employees/NewHireTab";
 import { useEmployees } from "@/hooks/useEmployees";
+import { useAuth } from "@/hooks/useAuth";
 import type { Employee } from "@/types/employee";
 import { EmployeeFormData } from "@/types/employee";
 import { Button } from "@/components/ui/button";
@@ -33,7 +36,11 @@ export default function Employees() {
     purgeEmployee,
   } = useEmployees();
 
+  const { user } = useAuth();
+  const isAdmin = user?.role === "Admin";
+
   const [viewMode, setViewMode]                   = useState<ViewMode>("list");
+  const [activeTab, setActiveTab]                 = useState("employees");
   const [selectedEmployee, setSelectedEmployee]   = useState<Employee | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen]   = useState(false);
   const [employeeToDelete, setEmployeeToDelete]   = useState<Employee | null>(null);
@@ -126,46 +133,64 @@ export default function Employees() {
             <Download className="mr-2 h-4 w-4" />
             Export
           </Button>
-          <Button disabled>
-            <UserPlus className="mr-2 h-4 w-4" /> New Hire
+          <Button onClick={() => { setActiveTab("employees"); setViewMode("add"); }}>
+            <UserPlus className="mr-2 h-4 w-4" /> New Employee
           </Button>
         </div>
       </div>
 
-      {/* Active / Archived Toggle */}
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <button
-            className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              !showArchived ? "bg-primary text-primary-foreground" : "bg-transparent text-muted-foreground"
-            }`}
-            onClick={() => setShowArchived(false)}
-          >
-            Active
-          </button>
-          <button
-            className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              showArchived ? "bg-primary text-primary-foreground" : "bg-transparent text-muted-foreground"
-            }`}
-            onClick={() => setShowArchived(true)}
-          >
-            Archived
-          </button>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          {showArchived ? "Viewing archived employees" : `${employees.length} active employees`}
-        </p>
-      </div>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className={`grid w-full ${isAdmin ? "grid-cols-2" : "grid-cols-1"}`}>
+          <TabsTrigger value="employees">Employees</TabsTrigger>
+          {isAdmin && <TabsTrigger value="new-hires">New Hires</TabsTrigger>}
+        </TabsList>
 
-      <EmployeeTable
-        employees={displayedEmployees}
-        onView={handleView}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        isArchivedView={showArchived}
-        onRestore={async (emp) => await restoreEmployee(emp.id)}
-        onPurge={(emp) => handlePurge(emp)}
-      />
+        {/* Employees Tab */}
+        <TabsContent value="employees" className="space-y-6">
+          {/* Active / Archived Toggle */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <button
+                className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  !showArchived ? "bg-primary text-primary-foreground" : "bg-transparent text-muted-foreground"
+                }`}
+                onClick={() => setShowArchived(false)}
+              >
+                Active
+              </button>
+              <button
+                className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  showArchived ? "bg-primary text-primary-foreground" : "bg-transparent text-muted-foreground"
+                }`}
+                onClick={() => setShowArchived(true)}
+              >
+                Archived
+              </button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {showArchived ? "Viewing archived employees" : `${employees.length} active employees`}
+            </p>
+          </div>
+
+          <EmployeeTable
+            employees={displayedEmployees}
+            onView={handleView}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            isArchivedView={showArchived}
+            onRestore={async (emp) => await restoreEmployee(emp.id)}
+            onPurge={(emp) => handlePurge(emp)}
+          />
+        </TabsContent>
+
+        {/* New Hires Tab - Admin only */}
+        {isAdmin && (
+          <TabsContent value="new-hires">
+            <NewHireTab />
+          </TabsContent>
+        )}
+      </Tabs>
 
       {/* Add Employee Dialog */}
       <Dialog open={viewMode === "add"} onOpenChange={(open) => !open && handleCloseForm()}>
