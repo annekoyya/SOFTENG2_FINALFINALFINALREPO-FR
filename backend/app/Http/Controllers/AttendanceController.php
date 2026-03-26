@@ -4,11 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\Attendance;
 use App\Models\Employee;
+use App\Models\Holiday;
 use App\Models\LeaveRequest;
 use App\Services\AttendanceService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class AttendanceController extends Controller
 {
@@ -20,136 +23,142 @@ class AttendanceController extends Controller
      * Clock in an employee.
      * POST /api/attendance/clock-in
      */
-    public function clockIn(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'employee_id' => 'required|exists:employees,id',
-        ]);
-
-        $employee = Employee::findOrFail($validated['employee_id']);
-
-        $validation = $this->attendanceService->validateClockInOut($employee, 'in');
-        if (!$validation['valid']) {
-            return $this->error(implode(', ', $validation['errors']));
+public function today(): JsonResponse
+{
+    $user     = Auth::user();
+    $employee = $user->employee;
+    $today    = now()->toDateString();
+ 
+    if (!$employee) {
+        return response()->json(['error' => 'No employee record found.'], 404);
+    }
+ 
+    $record = Attendance::where('employee_id', $employee->id)
+        ->where('date', $today)
+        ->first();
+ 
+    // Check leave
+    $onLeave = LeaveRequest::where('employee_id', $employee->id)
+        ->where('status', 'approved')
+        ->where('start_date', '<=', $today)
+        ->where('end_date',   '>=', $today)
+        ->exists();
+ 
+    // Check holiday
+    $holiday = Holiday::findForDate($today);
+ 
+    // Get shift (from employee record or default)
+    $shiftStart = $employee->shift_start ?? '08:00';
+    $shiftEnd   = $employee->shift_end   ?? '17:00';
+    $shiftName  = $employee->shift_name  ?? 'Regular shift';
+ 
+    return response()->json([
+        'has_clocked_in'  => (bool) $record?->check_in,
+        'has_clocked_out' => (bool) $record?->check_out,
+        'check_in'        => $record?->check_in,
+        'check_out'       => $record?->check_out,
+        'status'          => $record?->status,
+        'shift_start'     => $shiftStart,
+        'shift_end'       => $shiftEnd,
+        'shift_name'      => $shiftName,
+        'is_on_leave'     => $onLeave,
+        'is_holiday'      => (bool) $holiday,
+        'holiday_name'    => $holiday?->name,
+    ]);
+}
+ 
+// ── POST /api/attendance/clock-in ─────────────────────────────────────────────
+ 
+public function clockIn(): JsonResponse
+{
+    $employee = Auth::user()->employee;
+    $today    = now()->toDateString();
+    $timeNow  = now()->format('H:i');
+ 
+    if (!$employee) return response()->json(['message' => 'No employee record.'], 422);
+ 
+    // Prevent double clock-in
+    $existing = Attendance::where('employee_id', $employee->id)->where('date', $today)->first();
+    if ($existing?->check_in) {
+        return response()->json(['message' => 'You have already clocked in today.'], 422);
+    }
+ 
+    // Determine status (late if after shift_start + 5 min grace)
+    $shiftStart = $employee->shift_start ?? '08:00';
+    $graceCutoff = Carbon::parse($shiftStart)->addMinutes(5)->format('H:i');
+    $status = $timeNow > $graceCutoff ? 'late' : 'present';
+ 
+    Attendance::updateOrCreate(
+        ['employee_id' => $employee->id, 'date' => $today],
+        ['check_in' => $timeNow, 'status' => $status]
+    );
+ 
+    return response()->json(['message' => 'Clocked in.', 'time' => $timeNow, 'status' => $status]);
+}
+ 
+// ── POST /api/attendance/clock-out ────────────────────────────────────────────
+ 
+public function clockOut(): JsonResponse
+{
+    $employee = Auth::user()->employee;
+    $today    = now()->toDateString();
+    $timeNow  = now()->format('H:i');
+ 
+    if (!$employee) return response()->json(['message' => 'No employee record.'], 422);
+ 
+    $record = Attendance::where('employee_id', $employee->id)->where('date', $today)->first();
+ 
+    if (!$record || !$record->check_in) {
+        return response()->json(['message' => 'You have not clocked in yet.'], 422);
+    }
+    if ($record->check_out) {
+        return response()->json(['message' => 'You have already clocked out today.'], 422);
+    }
+ 
+    $record->update(['check_out' => $timeNow]);
+    return response()->json(['message' => 'Clocked out.', 'time' => $timeNow]);
+}
+ 
+// ── POST /api/attendance/import ───────────────────────────────────────────────
+// Bulk import from the frontend-parsed Excel rows
+ 
+public function import(Request $request): JsonResponse
+{
+    $request->validate([
+        'records'              => 'required|array|min:1',
+        'records.*.employee_id'=> 'required|integer|exists:employees,id',
+        'records.*.date'       => 'required|date',
+        'records.*.check_in'   => 'nullable|string',
+        'records.*.check_out'  => 'nullable|string',
+        'records.*.status'     => 'nullable|in:present,absent,late,on_leave,holiday',
+    ]);
+ 
+    $imported = 0;
+    $skipped  = 0;
+    $errors   = [];
+ 
+    DB::transaction(function () use ($request, &$imported, &$skipped, &$errors) {
+        foreach ($request->records as $row) {
+            try {
+                $updated = Attendance::updateOrCreate(
+                    ['employee_id' => $row['employee_id'], 'date' => $row['date']],
+                    [
+                        'check_in'  => $row['check_in']  ?? null,
+                        'check_out' => $row['check_out'] ?? null,
+                        'status'    => $row['status']    ?? 'present',
+                    ]
+                );
+                $updated->wasRecentlyCreated ? $imported++ : $skipped++;
+            } catch (\Exception $e) {
+                $errors[] = "Row employee #{$row['employee_id']} {$row['date']}: {$e->getMessage()}";
+                $skipped++;
+            }
         }
-
-        $attendance = $this->attendanceService->clockIn(
-            $employee,
-            $request->ip(),
-            $request->userAgent()
-        );
-
-        return $this->created($attendance->load('employee'), 'Successfully clocked in');
-    }
-
-    /**
-     * Clock out an employee.
-     * POST /api/attendance/clock-out
-     */
-    public function clockOut(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'employee_id' => 'required|exists:employees,id',
-        ]);
-
-        $employee = Employee::findOrFail($validated['employee_id']);
-
-        $validation = $this->attendanceService->validateClockInOut($employee, 'out');
-        if (!$validation['valid']) {
-            return $this->error(implode(', ', $validation['errors']));
-        }
-
-        $attendance = $this->attendanceService->clockOut($employee, $request->ip());
-
-        return $this->success($attendance->load('employee'), 'Successfully clocked out');
-    }
-
-    // ─── Live & Summary Data ──────────────────────────────────────────────────
-
-    /**
-     * Real-time workforce status for the live dashboard.
-     * GET /api/attendance/live-status
-     */
-    public function getLiveStatus(): JsonResponse
-    {
-        $liveStatus = $this->attendanceService->getLiveWorkforceStatus();
-
-        return $this->success($liveStatus);
-    }
-
-    /**
-     * Attendance records for a date range, with optional filters.
-     * GET /api/attendance
-     */
-    public function getAttendance(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'start_date'  => 'required|date',
-            'end_date'    => 'required|date|after_or_equal:start_date',
-            'employee_id' => 'sometimes|exists:employees,id',
-            'status'      => 'sometimes|in:present,late,absent,on_leave,half_day',
-        ]);
-
-        $query = Attendance::with(['employee', 'recorder'])
-            ->forDateRange($validated['start_date'], $validated['end_date']);
-
-        if ($request->filled('employee_id')) {
-            $query->where('employee_id', $validated['employee_id']);
-        }
-
-        if ($request->filled('status')) {
-            $query->where('status', $validated['status']);
-        }
-
-        $attendances = $query->orderBy('date', 'desc')->paginate(20);
-
-        return $this->success($attendances);
-    }
-
-    /**
-     * Attendance summary for an employee over a date range.
-     * GET /api/attendance/summary
-     */
-    public function getSummary(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'employee_id' => 'required|exists:employees,id',
-            'start_date'  => 'required|date',
-            'end_date'    => 'required|date|after_or_equal:start_date',
-        ]);
-
-        $employee = Employee::findOrFail($validated['employee_id']);
-        $summary  = $this->attendanceService->getAttendanceSummary(
-            $employee,
-            $validated['start_date'],
-            $validated['end_date']
-        );
-
-        return $this->success($summary);
-    }
-
-    /**
-     * Monthly attendance statistics for an employee.
-     * GET /api/attendance/monthly-stats
-     */
-    public function getMonthlyStats(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'employee_id' => 'required|exists:employees,id',
-            'month'       => 'required|integer|min:1|max:12',
-            'year'        => 'required|integer|min:2020',
-        ]);
-
-        $employee = Employee::findOrFail($validated['employee_id']);
-        $stats    = $this->attendanceService->getMonthlyStatistics(
-            $employee,
-            (int) $validated['month'],
-            (int) $validated['year']
-        );
-
-        return $this->success($stats);
-    }
-
+    });
+ 
+    return response()->json(compact('imported', 'skipped', 'errors'));
+}
+ 
     // ─── Manual Override (HR only) ────────────────────────────────────────────
 
     /**
@@ -279,4 +288,6 @@ class AttendanceController extends Controller
 
         return $this->success($leaveRequest->load('approver'), 'Leave request rejected');
     }
+
+    
 }

@@ -13,23 +13,18 @@ return new class extends Migration
     {
         Schema::create('holidays', function (Blueprint $table) {
             $table->id();
+            $table->string('name');
+            $table->date('date');
+            $table->enum('holiday_type', ['regular', 'special_non_working', 'special_working'])
+                  ->default('regular');
+            $table->boolean('is_recurring')->default(false);
+            $table->decimal('pay_multiplier', 4, 2)->default(1.00);
+            $table->text('description')->nullable();
+            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
-        });
 
-        Schema::create('holidays', function (Blueprint $table) {
-    $table->id();
-    $table->string('name');
-    $table->date('date');
-    $table->enum('holiday_type', ['regular','special_non_working','special_working'])
-          ->default('regular');
-    $table->boolean('is_recurring')->default(false);
-    $table->decimal('pay_multiplier', 4, 2)->default(1.00);
-    $table->text('description')->nullable();
-    $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
-    $table->timestamps();
- 
-    $table->unique(['date', 'name']); // prevent duplicates
-});
+            $table->unique(['date', 'name']); // prevent duplicates
+        });
     }
 
     /**

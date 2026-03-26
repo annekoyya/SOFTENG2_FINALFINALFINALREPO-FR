@@ -205,4 +205,29 @@ class PayslipController extends Controller
             \App\Models\EmployeeLoan::where('employee_id', $payslip->employee_id)->where('type', 'company')->active()->first()?->applyDeduction($payslip->company_loan_deduction);
         }
     }
+
+    public function approveAll(int $periodId): JsonResponse
+{
+    $period = PayrollPeriod::findOrFail($periodId);
+ 
+    $count = Payslip::where('payroll_period_id', $periodId)
+        ->where('status', 'computed')
+        ->update([
+            'status'      => 'approved',
+            'approved_by' => Auth::id(),
+            'approved_at' => now(),
+        ]);
+ 
+    PayrollAuditLog::create([
+        'action'      => 'bulk_approved',
+        'entity_type' => 'PayrollPeriod',
+        'entity_id'   => $periodId,
+        'user_id'     => Auth::id(),
+        'description' => "Bulk approved {$count} payslips for period #{$periodId}",
+    ]);
+ 
+    $period->update(['status' => 'approved']);
+ 
+    return response()->json(['message' => "Approved {$count} payslips.", 'count' => $count]);
+}
 }
