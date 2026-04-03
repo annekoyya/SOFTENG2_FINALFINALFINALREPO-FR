@@ -6,17 +6,22 @@ import {
   Users,
   Clock,
   DollarSign,
-  Archive,
   BarChart3,
-  ChevronLeft,
-  ChevronRight,
-  LogOut,
   Briefcase,
-  BookOpen,
+  ChevronLeft,
+  LogOut,
+  Settings,
+  HelpCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // ── Nav item definition ───────────────────────────────────────────────────────
 
@@ -24,26 +29,16 @@ interface NavItem {
   label: string;
   path: string;
   icon: React.ElementType;
-  /** Roles that can see this link. Undefined = all roles. */
   roles?: string[];
-  /** Visual separator above this item */
-  divider?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  // ── Core ──────────────────────────────────────────────────────────────────
   { label: "Dashboard", path: "/", icon: LayoutDashboard },
-  { label: "Employees", path: "/employees", icon: Users, roles: ["Admin", "HR Manager", "Manager"] },
+  { label: "Employee", path: "/employees", icon: Users, roles: ["Admin", "HR Manager", "Manager"] },
   { label: "Attendance", path: "/attendance", icon: Clock },
   { label: "Payroll", path: "/payroll", icon: DollarSign, roles: ["Admin", "Accountant", "HR Manager"] },
   { label: "Performance", path: "/performance", icon: BarChart3 },
-
-  // ── HR Operations ─────────────────────────────────────────────────────────
-  { label: "Recruitment", path: "/recruitment", icon: Briefcase, roles: ["Admin", "HR Manager"], divider: true },
-  { label: "Training", path: "/training", icon: BookOpen, roles: ["Admin", "HR Manager"] },
-
-  // ── Admin ─────────────────────────────────────────────────────────────────
-  { label: "Archived employees", path: "/archived-employees", icon: Archive, roles: ["Admin", "HR Manager"], divider: true },
+  { label: "Recruitment", path: "/recruitment", icon: Briefcase, roles: ["Admin", "HR Manager"] },
 ];
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -58,108 +53,229 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
   const [collapsed, setCollapsed] = useState<boolean>(false);
 
   const role = user?.role ?? "";
+  const userInitials = user?.name
+    ?.split(" ")
+    .map((n: string) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2) || "SA";
 
   const visibleItems = NAV_ITEMS.filter(
     (item: NavItem) => !item.roles || item.roles.includes(role)
   );
 
   const handleLinkClick = (path: string) => {
-    if (onNavigate) {
-      onNavigate(path);
-    }
+    if (onNavigate) onNavigate(path);
+  };
+
+  const handleLogout = () => {
+    logout();
   };
 
   return (
     <aside
       className={cn(
-        "flex flex-col border-r border-yellow-400 bg-blue-900 transition-all duration-300 select-none h-screen sticky top-0",
-        collapsed ? "w-16" : "w-64"
+        "flex flex-col bg-blue-900 transition-all duration-300 h-screen sticky top-0 shadow-xl",
+        collapsed ? "w-20" : "w-64"
       )}
     >
-      {/* Logo */}
+      {/* Logo Section - Blue Lotus Hotel */}
       <div
         className={cn(
-          "flex h-16 items-center border-b border-yellow-400 px-4 flex-shrink-0",
-          collapsed ? "justify-center" : "justify-between"
+          "flex h-24 items-center px-5 border-b border-yellow-500/20 flex-shrink-0",
+          collapsed ? "justify-center" : "justify-start"
         )}
       >
-        {!collapsed && (
-          <div>
-            <p className="font-semibold text-sm text-yellow-300 leading-tight">Blue Lotus</p>
-            <p className="text-xs text-yellow-200">HR Management</p>
+        {!collapsed ? (
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+
+              <div>
+               <p className="font-bold text-white text-base">BLUE LOTUS HOTEL</p>
+<p className="text-[11px] text-white/70 font-medium tracking-wide">Employee Management System</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center">
+
           </div>
         )}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 w-8 p-0 flex-shrink-0 text-yellow-300 hover:bg-blue-800 hover:text-yellow-200"
-          onClick={() => setCollapsed(!collapsed)}
-        >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" />
-          )}
-        </Button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
-        {visibleItems.map((item: NavItem) => {
-          const Icon = item.icon;
-          const isActive =
-            pathname === item.path ||
-            (item.path !== "/" && pathname.startsWith(item.path));
+      <nav className="flex-1 overflow-y-auto py-8 px-3">
+        <TooltipProvider delayDuration={300}>
+          <div className="space-y-1">
+            {visibleItems.map((item) => {
+              const Icon = item.icon;
+              const isActive =
+                pathname === item.path ||
+                (item.path !== "/" && pathname.startsWith(item.path));
 
-          return (
-            <div key={item.path}>
-              {/* Divider */}
-              {item.divider && !collapsed && (
-                <div className="my-2 border-t border-yellow-600" />
-              )}
-              {item.divider && collapsed && <div className="my-1" />}
+              const NavLink = () => (
+                <Link
+                  to={item.path}
+                  onClick={() => handleLinkClick(item.path)}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                    isActive
+                      ? "bg-yellow-500 text-blue-900 shadow-md"
+                      : "text-white/70 hover:bg-blue-800 hover:text-white",
+                    collapsed && "justify-center px-2"
+                  )}
+                >
+                  <Icon className={cn(
+                    "h-5 w-5 shrink-0 transition-all",
+                    isActive ? "text-blue-900" : "text-yellow-400/80"
+                  )} />
+                  {!collapsed && <span>{item.label}</span>}
+                </Link>
+              );
 
-              <Link
-                to={item.path}
-                title={collapsed ? item.label : undefined}
-                onClick={() => handleLinkClick(item.path)}
-                className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-yellow-500 text-blue-900 shadow-sm"
-                    : "text-yellow-200 hover:bg-blue-800 hover:text-yellow-300",
-                  collapsed && "justify-center px-2"
-                )}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {!collapsed && <span>{item.label}</span>}
-              </Link>
-            </div>
-          );
-        })}
+              if (collapsed) {
+                return (
+                  <Tooltip key={item.path}>
+                    <TooltipTrigger asChild>
+                      <NavLink />
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="bg-yellow-500 text-blue-900 font-medium border-none">
+                      {item.label}
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              }
+
+              return <NavLink key={item.path} />;
+            })}
+          </div>
+        </TooltipProvider>
       </nav>
 
-      {/* User info + Logout */}
-      <div className="border-t border-yellow-600 p-2 flex-shrink-0">
-        {!collapsed && user && (
-          <div className="mb-1 px-3 py-2">
-            <p className="text-sm font-medium text-yellow-300 truncate">{user.name}</p>
-            <p className="text-xs text-yellow-200">{user.role}</p>
+      {/* Bottom Section - User & Actions */}
+      <div className="border-t border-yellow-500/20 p-3 space-y-3">
+        {/* User Profile */}
+        <div
+          className={cn(
+            "rounded-lg transition-all duration-200",
+            !collapsed ? "bg-blue-800/50 p-2" : "p-1"
+          )}
+        >
+          <div className={cn(
+            "flex items-center gap-3",
+            collapsed && "justify-center"
+          )}>
+            <div className="h-9 w-9 rounded-full bg-yellow-500 flex items-center justify-center shadow-md">
+              <span className="text-sm font-bold text-blue-900">
+                {userInitials}
+              </span>
+            </div>
+            
+            {!collapsed && (
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white truncate">
+                  {user?.name || "System Admin"}
+                </p>
+                <p className="text-xs text-yellow-500/70">
+                  {user?.role || "Admin"}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Settings & Help & Logout */}
+        {!collapsed && (
+          <div className="flex items-center justify-between px-2 py-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 text-white/60 hover:text-yellow-400 hover:bg-blue-800"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 text-white/60 hover:text-yellow-400 hover:bg-blue-800"
+            >
+              <HelpCircle className="h-4 w-4" />
+            </Button>
+            <div className="w-px h-4 bg-yellow-500/20" />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 text-white/60 hover:text-red-400 hover:bg-red-500/10"
+              onClick={handleLogout}
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
           </div>
         )}
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn(
-            "w-full text-yellow-300 hover:text-yellow-200 hover:bg-blue-800",
-            collapsed ? "justify-center px-2" : "justify-start gap-3"
-          )}
-          onClick={() => logout()}
-          title={collapsed ? "Logout" : undefined}
-        >
-          <LogOut className="h-4 w-4 shrink-0" />
-          {!collapsed && <span>Logout</span>}
-        </Button>
+
+        {/* Collapsed version of actions */}
+        {collapsed && (
+          <div className="flex flex-col items-center gap-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 text-white/60 hover:text-yellow-400 hover:bg-blue-800"
+                >
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="bg-yellow-500 text-blue-900 border-none">
+                Settings
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 text-white/60 hover:text-yellow-400 hover:bg-blue-800"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="bg-yellow-500 text-blue-900 border-none">
+                Help
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 text-white/60 hover:text-red-400 hover:bg-red-500/10"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="bg-yellow-500 text-blue-900 border-none">
+                Logout
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        )}
+
+        {/* Collapse Toggle Button */}
+        <div className="flex justify-center pt-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "h-7 w-7 p-0 text-white/60 hover:text-yellow-400 hover:bg-blue-800",
+              collapsed && "rotate-180"
+            )}
+            onClick={() => setCollapsed(!collapsed)}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
     </aside>
   );

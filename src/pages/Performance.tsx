@@ -1,7 +1,6 @@
 // src/pages/Performance.tsx
 import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -114,173 +113,163 @@ export default function Performance() {
 
   return (
     <DashboardLayout>
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="font-display text-3xl font-semibold text-foreground">
-          Performance Management
-        </h1>
-      </div>
+      <div className="space-y-6 p-6">
+        {/* Header */}
+        <div className="mb-6 flex items-center justify-between">
+          <h1 className="font-display text-3xl font-semibold text-foreground">
+            Performance Management
+          </h1>
+        </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="evaluations" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="evaluations">Evaluations</TabsTrigger>
-          {canManage && (
-            <TabsTrigger value="interviews">Interview Schedule</TabsTrigger>
-          )}
-        </TabsList>
+        {/* Create Button */}
+        {canManage && (
+          <Button onClick={() => setView("create")} className="gap-2">
+            <Plus className="h-4 w-4" />
+            New Evaluation
+          </Button>
+        )}
 
-        {/* Evaluations Tab */}
-        <TabsContent value="evaluations" className="space-y-6">
-          {canManage && (
-            <Button onClick={() => setView("create")} className="gap-2">
-              <Plus className="h-4 w-4" />
-              New Evaluation
-            </Button>
-          )}
-
-          {/* Search */}
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search evaluations"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <Button variant="outline" size="sm">
-              <Filter className="h-4 w-4" />
-            </Button>
+        {/* Search */}
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search evaluations"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-9"
+            />
           </div>
+          <Button variant="outline" size="sm">
+            <Filter className="h-4 w-4" />
+          </Button>
+        </div>
 
-          {/* Loading */}
-          {isLoading && forms.length === 0 && (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        {/* Loading */}
+        {isLoading && forms.length === 0 && (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        )}
+
+        {/* Active Evaluations */}
+        {filteredActive.length > 0 && (
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-semibold">Active Evaluations</h2>
             </div>
-          )}
-
-          {/* Active Evaluations */}
-          {filteredActive.length > 0 && (
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <div className="px-6 py-4 border-b border-border">
-                <h2 className="text-lg font-semibold">Active Evaluations</h2>
-              </div>
-              <table className="w-full text-sm">
-                <thead className="bg-muted/30">
-                  <tr>
-                    <th className="px-6 py-3 text-left font-semibold">Evaluation Name</th>
-                    <th className="px-6 py-3 text-left font-semibold">Department</th>
-                    <th className="px-6 py-3 text-left font-semibold">Progress</th>
-                    <th className="px-6 py-3 text-left font-semibold">Deadline</th>
-                    <th className="px-6 py-3 text-left font-semibold">Status</th>
-                    <th className="px-6 py-3 text-left font-semibold">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredActive.map(form => {
-                    const { total, received, pct } = getProgress(form);
-                    return (
-                      <tr key={form.id} className="hover:bg-muted/20 transition-colors">
-                        <td className="px-6 py-4 font-medium">{form.title}</td>
-                        <td className="px-6 py-4 text-muted-foreground">{form.department}</td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <Progress value={pct} className="h-2 w-28" />
-                            <span className="text-xs text-muted-foreground items-center">
-                              {received}/{total}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-muted-foreground">{formatDate(form.deadline)}</td>
-                        <td className="px-6 py-4">
-                          <Badge className={cn("border text-xs capitalize", statusStyles[form.status])}>
-                            {form.status}
-                          </Badge>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0"
-                              onClick={() => handleViewAnalytics(form)} title="Analytics">
-                              <TrendingUp className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Drafts */}
-          {filteredDrafts.length > 0 && (
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <div className="px-6 py-4 border-b border-border">
-                <h2 className="text-lg font-semibold">Drafts</h2>
-              </div>
-              <table className="w-full text-sm">
-                <thead className="bg-muted/30">
-                  <tr>
-                    <th className="px-6 py-3 text-left font-semibold">Evaluation Name</th>
-                    <th className="px-6 py-3 text-left font-semibold">Department</th>
-                    <th className="px-6 py-3 text-left font-semibold">Last Edited</th>
-                    <th className="px-6 py-3 text-left font-semibold">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredDrafts.map(form => (
+            <table className="w-full text-sm">
+              <thead className="bg-muted/30">
+                <tr>
+                  <th className="px-6 py-3 text-left font-semibold">Evaluation Name</th>
+                  <th className="px-6 py-3 text-left font-semibold">Department</th>
+                  <th className="px-6 py-3 text-left font-semibold">Progress</th>
+                  <th className="px-6 py-3 text-left font-semibold">Deadline</th>
+                  <th className="px-6 py-3 text-left font-semibold">Status</th>
+                  <th className="px-6 py-3 text-left font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredActive.map(form => {
+                  const { total, received, pct } = getProgress(form);
+                  return (
                     <tr key={form.id} className="hover:bg-muted/20 transition-colors">
                       <td className="px-6 py-4 font-medium">{form.title}</td>
                       <td className="px-6 py-4 text-muted-foreground">{form.department}</td>
-                      <td className="px-6 py-4 text-muted-foreground">
-                        {formatDate(form.updated_at)}
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <Progress value={pct} className="h-2 w-28" />
+                          <span className="text-xs text-muted-foreground">
+                            {received}/{total}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-muted-foreground">{formatDate(form.deadline)}</td>
+                      <td className="px-6 py-4">
+                        <Badge className={cn("border text-xs capitalize", statusStyles[form.status])}>
+                          {form.status}
+                        </Badge>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-primary"
-                            onClick={() => handleSendDraft(form)}
-                            disabled={sendingId === form.id}
-                            title="Send to evaluators">
-                            {sendingId === form.id
-                              ? <Loader2 className="h-4 w-4 animate-spin" />
-                              : <Send className="h-4 w-4" />}
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => handleViewAnalytics(form)} 
+                            title="Analytics"
+                          >
+                            <TrendingUp className="h-4 w-4" />
                           </Button>
                         </div>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Empty state */}
-          {!isLoading && forms.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-24 text-center">
-              <TrendingUp className="mb-4 h-12 w-12 text-muted-foreground/40" />
-              <p className="text-lg font-medium text-muted-foreground">No evaluations yet</p>
-              {canManage && (
-                <Button className="mt-4" onClick={() => setView("create")}>
-                  <Plus className="mr-2 h-4 w-4" /> Create First Evaluation
-                </Button>
-              )}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* Interviews Tab (Admin/Manager only) */}
-        {canManage && (
-          <TabsContent value="interviews" className="space-y-6">
-            <div className="rounded-lg border border-dashed border-border bg-muted/30 p-12 text-center">
-              <p className="text-muted-foreground">Interview scheduling feature (Recruitment integration)</p>
-            </div>
-          </TabsContent>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
-      </Tabs>
+
+        {/* Drafts */}
+        {filteredDrafts.length > 0 && (
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-semibold">Drafts</h2>
+            </div>
+            <table className="w-full text-sm">
+              <thead className="bg-muted/30">
+                <tr>
+                  <th className="px-6 py-3 text-left font-semibold">Evaluation Name</th>
+                  <th className="px-6 py-3 text-left font-semibold">Department</th>
+                  <th className="px-6 py-3 text-left font-semibold">Last Edited</th>
+                  <th className="px-6 py-3 text-left font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredDrafts.map(form => (
+                  <tr key={form.id} className="hover:bg-muted/20 transition-colors">
+                    <td className="px-6 py-4 font-medium">{form.title}</td>
+                    <td className="px-6 py-4 text-muted-foreground">{form.department}</td>
+                    <td className="px-6 py-4 text-muted-foreground">
+                      {formatDate(form.updated_at)}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-1">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 w-8 p-0 text-primary"
+                          onClick={() => handleSendDraft(form)}
+                          disabled={sendingId === form.id}
+                          title="Send to evaluators"
+                        >
+                          {sendingId === form.id
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : <Send className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!isLoading && forms.length === 0 && (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-24 text-center">
+            <TrendingUp className="mb-4 h-12 w-12 text-muted-foreground/40" />
+            <p className="text-lg font-medium text-muted-foreground">No evaluations yet</p>
+            {canManage && (
+              <Button className="mt-4" onClick={() => setView("create")}>
+                <Plus className="mr-2 h-4 w-4" /> Create First Evaluation
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
     </DashboardLayout>
   );
 }
