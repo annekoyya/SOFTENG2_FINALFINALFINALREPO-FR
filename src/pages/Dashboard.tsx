@@ -2,12 +2,15 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { authFetch } from "@/hooks/api";
+import { Sidebar } from "@/components/layout/Sidebar";
+
 import {
   Users, DollarSign, CheckCircle, Timer,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+<Sidebar />
 interface DashboardStats {
   total_employees: number;
   present_today: number;

@@ -72,27 +72,27 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
   return (
     <aside
       className={cn(
-        "flex flex-col border-r border-blue-300 bg-blue-100 transition-all duration-300 select-none h-screen sticky top-0",
+        "flex flex-col border-r border-yellow-400 bg-blue-900 transition-all duration-300 select-none h-screen sticky top-0",
         collapsed ? "w-16" : "w-64"
       )}
     >
       {/* Logo */}
       <div
         className={cn(
-          "flex h-16 items-center border-b border-blue-300 px-4 flex-shrink-0",
+          "flex h-16 items-center border-b border-yellow-400 px-4 flex-shrink-0",
           collapsed ? "justify-center" : "justify-between"
         )}
       >
         {!collapsed && (
           <div>
-            <p className="font-semibold text-sm text-blue-900 leading-tight">Blue Lotus</p>
-            <p className="text-xs text-blue-700">HR Management</p>
+            <p className="font-semibold text-sm text-yellow-300 leading-tight">Blue Lotus</p>
+            <p className="text-xs text-yellow-200">HR Management</p>
           </div>
         )}
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 w-8 p-0 flex-shrink-0 text-blue-800 hover:bg-blue-200 hover:text-blue-900"
+          className="h-8 w-8 p-0 flex-shrink-0 text-yellow-300 hover:bg-blue-800 hover:text-yellow-200"
           onClick={() => setCollapsed(!collapsed)}
         >
           {collapsed ? (
@@ -115,7 +115,7 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
             <div key={item.path}>
               {/* Divider */}
               {item.divider && !collapsed && (
-                <div className="my-2 border-t border-blue-300" />
+                <div className="my-2 border-t border-yellow-600" />
               )}
               {item.divider && collapsed && <div className="my-1" />}
 
@@ -127,7 +127,7 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
                   "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                   isActive
                     ? "bg-yellow-500 text-blue-900 shadow-sm"
-                    : "text-blue-800 hover:bg-blue-200 hover:text-blue-900",
+                    : "text-yellow-200 hover:bg-blue-800 hover:text-yellow-300",
                   collapsed && "justify-center px-2"
                 )}
               >
@@ -140,18 +140,18 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
       </nav>
 
       {/* User info + Logout */}
-      <div className="border-t border-blue-300 p-2 flex-shrink-0">
+      <div className="border-t border-yellow-600 p-2 flex-shrink-0">
         {!collapsed && user && (
           <div className="mb-1 px-3 py-2">
-            <p className="text-sm font-medium text-blue-900 truncate">{user.name}</p>
-            <p className="text-xs text-blue-700">{user.role}</p>
+            <p className="text-sm font-medium text-yellow-300 truncate">{user.name}</p>
+            <p className="text-xs text-yellow-200">{user.role}</p>
           </div>
         )}
         <Button
           variant="ghost"
           size="sm"
           className={cn(
-            "w-full text-blue-700 hover:text-blue-900 hover:bg-blue-100",
+            "w-full text-yellow-300 hover:text-yellow-200 hover:bg-blue-800",
             collapsed ? "justify-center px-2" : "justify-start gap-3"
           )}
           onClick={() => logout()}

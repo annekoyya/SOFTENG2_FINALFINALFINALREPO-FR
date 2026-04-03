@@ -150,13 +150,16 @@ export default function NewHireTab() {
 
   useEffect(() => { fetchHires(); }, []);
 
-  const filtered = hires.filter((h) => filter === "all" || h.status === filter);
+  // Safe array guard for hires
+  const safeHires = Array.isArray(hires) ? hires : (hires as any)?.data ?? [];
+
+  const filtered = safeHires.filter((h) => filter === "all" || h.status === filter);
 
   const counts = {
-    all:         hires.length,
-    pending:     hires.filter((h) => h.status === "pending").length,
-    complete:    hires.filter((h) => h.status === "complete").length,
-    transferred: hires.filter((h) => h.status === "transferred").length,
+    all:         safeHires.length,
+    pending:     safeHires.filter((h) => h.status === "pending").length,
+    complete:    safeHires.filter((h) => h.status === "complete").length,
+    transferred: safeHires.filter((h) => h.status === "transferred").length,
   };
 
   const handleTransfer = async (id: number) => {

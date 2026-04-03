@@ -57,107 +57,109 @@ export default function Training() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-blue-900">Training Management</h1>
-          <p className="text-blue-600">Manage training courses and employee development programs</p>
+          <h1 className="text-2xl font-bold text-gray-900">Training Management</h1>
+          <p className="text-sm text-gray-600">Manage training courses and employee development programs</p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-yellow-400 text-blue-900 hover:bg-yellow-500">
-              <Plus className="h-4 w-4 mr-2" />
-              Create Course
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>Create New Training Course</DialogTitle>
-              <DialogDescription>
-                Add a new training course for employee development.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="title">Course Title</Label>
-                <Input id="title" placeholder="Enter course title" />
-              </div>
-              <div>
-                <Label htmlFor="description">Description</Label>
-                <Textarea id="description" placeholder="Enter course description" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+        {["Admin", "HR Manager"].includes(user?.role ?? "") && (
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-yellow-500 text-blue-900 hover:bg-yellow-600">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Program
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Create New Training Program</DialogTitle>
+                <DialogDescription>
+                  Add a new training course for employee development.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
                 <div>
-                  <Label htmlFor="type">Type</Label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="mandatory">Mandatory</SelectItem>
-                      <SelectItem value="optional">Optional</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="title">Program Title</Label>
+                  <Input id="title" placeholder="Enter program title" />
                 </div>
                 <div>
-                  <Label htmlFor="duration">Duration</Label>
-                  <Input id="duration" placeholder="e.g., 4 hours" />
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea id="description" placeholder="Enter program description" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="type">Type</Label>
+                    <Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="mandatory">Mandatory</SelectItem>
+                        <SelectItem value="optional">Optional</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="duration">Duration</Label>
+                    <Input id="duration" placeholder="e.g., 4 hours" />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button className="bg-yellow-500 text-blue-900 hover:bg-yellow-600">
+                    Create Program
+                  </Button>
                 </div>
               </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleCreateCourse} className="bg-yellow-400 text-blue-900 hover:bg-yellow-500">
-                  Create Course
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="border-blue-200">
+        <Card className="border-border/60">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-700">Total Courses</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Programs</CardTitle>
             <BookOpen className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-900">{courses.length}</div>
+            <div className="text-2xl font-bold">{courses.length}</div>
           </CardContent>
         </Card>
-        <Card className="border-blue-200">
+        <Card className="border-border/60">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-700">Active Courses</CardTitle>
+            <CardTitle className="text-sm font-medium">Active Programs</CardTitle>
             <Clock className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-900">
+            <div className="text-2xl font-bold">
               {courses.filter(c => c.status === 'Active').length}
             </div>
           </CardContent>
         </Card>
-        <Card className="border-blue-200">
+        <Card className="border-border/60">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-700">Total Enrolled</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Enrolled</CardTitle>
             <Users className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-900">
+            <div className="text-2xl font-bold">
               {courses.reduce((sum, c) => sum + c.enrolled, 0)}
             </div>
           </CardContent>
         </Card>
-        <Card className="border-blue-200">
+        <Card className="border-border/60">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-700">Completed</CardTitle>
-            <CheckCircle className="h-4 w-4 text-blue-600" />
+            <CardTitle className="text-sm font-medium">Completed</CardTitle>
+            <CheckCircle className="h-4 w-4 text-emerald-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-900">
+            <div className="text-2xl font-bold">
               {courses.reduce((sum, c) => sum + c.completed, 0)}
             </div>
           </CardContent>
@@ -165,10 +167,10 @@ export default function Training() {
       </div>
 
       {/* Training Courses Table */}
-      <Card className="border-blue-200">
+      <Card className="border-border/60">
         <CardHeader>
-          <CardTitle className="text-blue-900">Training Courses</CardTitle>
-          <CardDescription className="text-blue-600">
+          <CardTitle>Training Programs</CardTitle>
+          <CardDescription>
             Manage and track employee training programs
           </CardDescription>
         </CardHeader>
@@ -176,7 +178,7 @@ export default function Training() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-blue-700">Course Title</TableHead>
+                <TableHead className="text-xs text-muted-foreground">Program Title</TableHead>
                 <TableHead className="text-blue-700">Type</TableHead>
                 <TableHead className="text-blue-700">Duration</TableHead>
                 <TableHead className="text-blue-700">Status</TableHead>

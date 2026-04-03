@@ -191,14 +191,17 @@ export default function JobPostingsPanel({
   const [editing, setEditing] = useState<JobPosting | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | JobStatus>("all");
 
-  const filtered = jobs.filter((j) => statusFilter === "all" || j.status === statusFilter);
+  // Safe array guard for jobs
+  const safeJobs = Array.isArray(jobs) ? jobs : (jobs as any)?.data ?? [];
+
+  const filtered = safeJobs.filter((j) => statusFilter === "all" || j.status === statusFilter);
 
   const counts = {
-    all: jobs.length,
-    open: jobs.filter((j) => j.status === "open").length,
-    draft: jobs.filter((j) => j.status === "draft").length,
-    closed: jobs.filter((j) => j.status === "closed").length,
-    cancelled: jobs.filter((j) => j.status === "cancelled").length,
+    all: safeJobs.length,
+    open: safeJobs.filter((j) => j.status === "open").length,
+    draft: safeJobs.filter((j) => j.status === "draft").length,
+    closed: safeJobs.filter((j) => j.status === "closed").length,
+    cancelled: safeJobs.filter((j) => j.status === "cancelled").length,
   };
 
   const handleClose = async (job: JobPosting) => {
