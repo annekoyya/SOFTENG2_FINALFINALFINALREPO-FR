@@ -18,7 +18,7 @@ import {
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
-import { UserPlus, Download } from "lucide-react";
+import { UserPlus } from "lucide-react";
 
 type ViewMode = "list" | "add" | "edit" | "view";
 
@@ -128,15 +128,6 @@ export default function Employees() {
             Manage all employee records and information
           </p>
         </div>
-        <div className="flex gap-3">
-          <Button variant="outline">
-            <Download className="mr-2 h-4 w-4" />
-            Export
-          </Button>
-          <Button onClick={() => { setActiveTab("employees"); setViewMode("add"); }}>
-            <UserPlus className="mr-2 h-4 w-4" /> New Employee
-          </Button>
-        </div>
       </div>
 
       {/* Tabs */}
@@ -181,6 +172,7 @@ export default function Employees() {
             isArchivedView={showArchived}
             onRestore={async (emp) => await restoreEmployee(emp.id)}
             onPurge={(emp) => handlePurge(emp)}
+            isAdmin={isAdmin}
           />
         </TabsContent>
 

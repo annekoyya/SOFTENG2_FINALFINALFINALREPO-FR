@@ -12,19 +12,15 @@ import Employees          from "./pages/Employees";
 import Attendance         from "./pages/Attendance";
 import Accounting         from "./pages/Accounting";
 import Performance        from "./pages/Performance";
+import Leave              from "./pages/Leave";
+import Recruitment        from "./pages/Recruitment";
+import Training           from "./pages/Training";
 import ArchivedEmployees  from "./pages/ArchivedEmployees";
 import Login              from "./pages/Login";
 import NotFound           from "./pages/NotFound";
 
 // ── New pages (copy files from the outputs folder into src/pages/) ─────────────
-import Recruitment        from "./pages/Recruitment";
-import Leave              from "./pages/Leave";
-import Overtime           from "./pages/Overtime";
-import HolidayCalendar    from "./pages/HolidayCalendar";
-import SalaryRevision     from "./pages/SalaryRevision";
-import TrainingModule     from "./pages/TrainingModule";
-import YearEndTax         from "./pages/YearEndTax";
-import ShiftManagement    from "./pages/ShiftManagement";
+
 
 const queryClient = new QueryClient();
 
@@ -54,17 +50,13 @@ const App = () => (
           <Route path="/attendance"         element={<PrivateRoute><Attendance /></PrivateRoute>} />
           <Route path="/payroll"            element={<PrivateRoute><Accounting /></PrivateRoute>} />
           <Route path="/performance"        element={<PrivateRoute><Performance /></PrivateRoute>} />
+          <Route path="/leave"              element={<PrivateRoute><Leave /></PrivateRoute>} />
+          <Route path="/recruitment"        element={<PrivateRoute><Recruitment /></PrivateRoute>} />
+          <Route path="/training"           element={<PrivateRoute><Training /></PrivateRoute>} />
           <Route path="/archived-employees" element={<PrivateRoute><ArchivedEmployees /></PrivateRoute>} />
 
           {/* ── New protected pages ──────────────────────────────────────────── */}
-          <Route path="/recruitment"        element={<PrivateRoute><Recruitment /></PrivateRoute>} />
-          <Route path="/leave"              element={<PrivateRoute><Leave /></PrivateRoute>} />
-          <Route path="/overtime"           element={<PrivateRoute><Overtime /></PrivateRoute>} />
-          <Route path="/holidays"           element={<PrivateRoute><HolidayCalendar /></PrivateRoute>} />
-          <Route path="/salary-revisions"   element={<PrivateRoute><SalaryRevision /></PrivateRoute>} />
-          <Route path="/training"           element={<PrivateRoute><TrainingModule /></PrivateRoute>} />
-          <Route path="/year-end-tax"       element={<PrivateRoute><YearEndTax /></PrivateRoute>} />
-          <Route path="/shifts"             element={<PrivateRoute><ShiftManagement /></PrivateRoute>} />
+    
 
           {/* ── 404 ─────────────────────────────────────────────────────────── */}
           <Route path="*" element={<NotFound />} />

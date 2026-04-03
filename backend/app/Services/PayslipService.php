@@ -612,4 +612,157 @@ class PayslipService
 
         return $payslip->fresh(['employee', 'lineItems']);
     }
+
+    // Add these methods to your PayslipService class
+
+/**
+ * Generate payslips for all employees in a period
+ * Alias for computeAll() to match controller expectations
+ */
+    /**
+     * Generate payslips for all employees in a period
+     * Alias for computeAll() to match controller expectations
+     */
+    public function generatePayslipsForPeriod(PayrollPeriod $period): array
+    {
+        // Use the existing computeAll method
+        $results = $this->computeAll($period, auth()->user()?->id ?? 1);
+        
+        // Return the payslip objects from the success results
+        $payslips = [];
+        foreach ($results['success'] as $success) {
+            $payslip = Payslip::where('payroll_period_id', $period->id)
+                ->where('employee_id', $success['employee_id'])
+                ->first();
+            if ($payslip) {
+                $payslips[] = $payslip;
+            }
+        }
+        
+        return $payslips;
+    }
+
+    /**
+     * Approve a single payslip
+     */
+    public function approvePayslip(Payslip $payslip): Payslip
+    {
+        if ($payslip->status !== 'computed' && $payslip->status !== 'draft') {
+            throw new \Exception('Payslip must be in computed or draft status to approve');
+        }
+        
+        $payslip->update([
+            'status' => 'approved',
+            'approved_by' => auth()->user()?->id ?? 1,
+            'approved_at' => now(),
+        ]);
+        
+        PayrollAuditLog::record(
+            entityType: 'payslip',
+            entityId: $payslip->id,
+            action: 'approved',
+            performedBy: auth()->user()?->id ?? 1,
+            afterValues: ['status' => 'approved'],
+            description: "Payslip approved for period {$payslip->payrollPeriod->label}",
+            ipAddress: request()->ip(),
+        );
+        
+        return $payslip->fresh();
+    }
+
+    /**
+     * Get summary for a payroll period
+     */
+    public function getSummary(PayrollPeriod $period): array
+    {
+        $payslips = Payslip::where('payroll_period_id', $period->id)->get();
+        
+        $summary = [
+            'total_employees' => $payslips->count(),
+            'total_gross_pay' => round($payslips->sum('gross_pay'), 2),
+            'total_deductions' => round($payslips->sum('total_deductions'), 2),
+            'total_net_pay' => round($payslips->sum('net_pay'), 2),
+            'breakdown' => [
+                'basic_pay' => round($payslips->sum('basic_pay'), 2),
+                'overtime_pay' => round($payslips->sum('overtime_pay'), 2),
+                'allowances' => round(
+                    $payslips->sum('transport_allowance') + 
+                    $payslips->sum('meal_allowance') + 
+                    $payslips->sum('other_allowances'), 2
+                ),
+                'bonuses' => round($payslips->sum('bonuses'), 2),
+                'thirteenth_month' => round($payslips->sum('thirteenth_month_pay'), 2),
+                'deductions' => [
+                    'sss' => round($payslips->sum('sss_employee'), 2),
+                    'philhealth' => round($payslips->sum('philhealth_employee'), 2),
+                    'pagibig' => round($payslips->sum('pagibig_employee'), 2),
+                    'tax' => round($payslips->sum('bir_withholding_tax'), 2),
+                    'absences' => round($payslips->sum('absent_deduction'), 2),
+                    'lates' => round($payslips->sum('late_deduction'), 2),
+                    'loans' => round(
+                        $payslips->sum('sss_loan_deduction') +
+                        $payslips->sum('pagibig_loan_deduction') +
+                        $payslips->sum('company_loan_deduction'), 2
+                    ),
+                ],
+            ],
+            'status_breakdown' => [
+                'computed' => $payslips->where('status', 'computed')->count(),
+                'approved' => $payslips->where('status', 'approved')->count(),
+                'paid' => $payslips->where('status', 'paid')->count(),
+            ],
+        ];
+        
+        return $summary;
+    }
+
+    /**
+     * Mark a payslip as paid
+     */
+    public function markAsPaid(Payslip $payslip): Payslip
+    {
+        if ($payslip->status !== 'approved') {
+            throw new \Exception('Payslip must be approved before marking as paid');
+        }
+        
+        $payslip->update([
+            'status' => 'paid',
+            'paid_by' => auth()->user()?->id ?? 1,
+            'paid_at' => now(),
+        ]);
+        
+        PayrollAuditLog::record(
+            entityType: 'payslip',
+            entityId: $payslip->id,
+            action: 'paid',
+            performedBy: auth()->user()?->id ?? 1,
+            afterValues: ['status' => 'paid'],
+            description: "Payslip marked as paid for period {$payslip->payrollPeriod->label}",
+            ipAddress: request()->ip(),
+        );
+        
+        return $payslip->fresh();
+    }
+
+    /**
+     * Recompute a payslip (useful after manual adjustments)
+     */
+    public function recompute(Payslip $payslip): Payslip
+    {
+        // Fetch the period and employee using the relationship methods
+        $period = $payslip->payrollPeriod;
+        $employee = $payslip->employee;
+        
+        if (!$period || !$employee) {
+            throw new \Exception('Cannot recompute: Missing period or employee');
+        }
+        
+        // Make sure we have valid IDs
+        if (!$period->id || !$employee->id) {
+            throw new \Exception('Cannot recompute: Invalid period or employee ID');
+        }
+        
+        // Recompute using the existing compute method
+        return $this->compute($employee, $period, auth()->user()?->id ?? 1);
+    }
 }

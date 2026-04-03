@@ -2,10 +2,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Employee, EmployeeFormData } from "@/types/employee";
-import { departments } from "@/data/mockEmployees";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -24,29 +22,35 @@ import {
 } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Camera, Upload } from "lucide-react";
-import { useState } from "react";
+import { Upload } from "lucide-react";
 
 const employeeSchema = z.object({
   first_name: z.string().min(2, "First name must be at least 2 characters").max(50),
   last_name: z.string().min(2, "Last name must be at least 2 characters").max(50),
-  email: z.string().email("Invalid email address"),
-  phone: z.string().min(10, "Phone number must be at least 10 characters"),
+  middle_name: z.string().optional(),
+  name_extension: z.string().optional(),
   date_of_birth: z.string().min(1, "Date of birth is required"),
-  gender: z.enum(["male", "female", "other"]),
-  address: z.string().min(5, "Address must be at least 5 characters"),
-  city: z.string().min(2, "City is required"),
-  province: z.string().min(2, "Province is required"),
-  zip_code: z.string().min(4, "Zip code is required"),
-  department_id: z.string().min(1, "Department is required"),
-  position: z.string().min(2, "Position is required"),
-  employment_type: z.enum(["full-time", "part-time", "contract", "intern"]),
-  hire_date: z.string().min(1, "Hire date is required"),
-  salary: z.coerce.number().min(1, "Salary must be greater than 0"),
-  status: z.enum(["active", "on_leave", "terminated", "suspended"]),
-  photo_url: z.string().optional(),
+  email: z.string().email("Invalid email address"),
+  phone_number: z.string().min(10, "Phone number must be at least 10 characters"),
+  home_address: z.string().min(5, "Address must be at least 5 characters"),
   emergency_contact_name: z.string().optional(),
-  emergency_contact_phone: z.string().optional(),
+  emergency_contact_number: z.string().optional(),
+  relationship: z.string().optional(),
+  tin: z.string().optional(),
+  sss_number: z.string().optional(),
+  pagibig_number: z.string().optional(),
+  philhealth_number: z.string().optional(),
+  bank_name: z.string().optional(),
+  account_name: z.string().optional(),
+  account_number: z.string().optional(),
+  start_date: z.string().min(1, "Start date is required"),
+  department: z.string().min(1, "Department is required"),
+  job_category: z.string().min(2, "Job category is required"),
+  employment_type: z.enum(["regular", "probationary", "contractual", "part_time", "intern"]),
+  shift_sched: z.enum(["morning", "afternoon", "night"]),
+  basic_salary: z.coerce.number().min(1, "Salary must be greater than 0"),
+  role: z.enum(["Employee", "HR", "Manager", "Accountant", "Admin"]).optional(),
+  manager_id: z.number().optional(),
 });
 
 interface EmployeeFormProps {
@@ -56,45 +60,59 @@ interface EmployeeFormProps {
   isLoading?: boolean;
 }
 
-export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: EmployeeFormProps) {
-  const [photoPreview, setPhotoPreview] = useState<string | null>(employee?.photo_url || null);
+// Department options
+const departmentOptions = [
+  { id: "Human Resources", name: "Human Resources" },
+  { id: "Finance", name: "Finance" },
+  { id: "Front Office", name: "Front Office" },
+  { id: "Food & Beverage", name: "Food & Beverage" },
+  { id: "Housekeeping", name: "Housekeeping" },
+];
 
+// Job category options with corresponding salaries
+const jobCategoryOptions = [
+  { id: "Receptionist", name: "Receptionist", salary: 15000 },
+  { id: "Housekeeper", name: "Housekeeper", salary: 12000 },
+  { id: "Waiter", name: "Waiter", salary: 13000 },
+  { id: "Cook", name: "Cook", salary: 18000 },
+  { id: "Supervisor", name: "Supervisor", salary: 20000 },
+  { id: "Manager", name: "Manager", salary: 30000 },
+  { id: "Accountant", name: "Accountant", salary: 25000 },
+  { id: "HR Specialist", name: "HR Specialist", salary: 22000 },
+];
+
+export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: EmployeeFormProps) {
   const form = useForm<z.infer<typeof employeeSchema>>({
     resolver: zodResolver(employeeSchema),
     defaultValues: {
       first_name: employee?.first_name || "",
       last_name: employee?.last_name || "",
-      email: employee?.email || "",
-      phone: employee?.phone || "",
+      middle_name: employee?.middle_name || "",
+      name_extension: employee?.name_extension || "",
       date_of_birth: employee?.date_of_birth || "",
-      gender: employee?.gender || "male",
-      address: employee?.address || "",
-      city: employee?.city || "",
-      province: employee?.province || "",
-      zip_code: employee?.zip_code || "",
-      department_id: employee?.department_id || "",
-      position: employee?.position || "",
-      employment_type: employee?.employment_type || "full-time",
-      hire_date: employee?.hire_date || "",
-      salary: employee?.salary || 0,
-      status: employee?.status || "active",
-      photo_url: employee?.photo_url || "",
+      email: employee?.email || "",
+      phone_number: employee?.phone_number || "",
+      home_address: employee?.home_address || "",
       emergency_contact_name: employee?.emergency_contact_name || "",
-      emergency_contact_phone: employee?.emergency_contact_phone || "",
+      emergency_contact_number: employee?.emergency_contact_number || "",
+      relationship: employee?.relationship || "",
+      tin: employee?.tin || "",
+      sss_number: employee?.sss_number || "",
+      pagibig_number: employee?.pagibig_number || "",
+      philhealth_number: employee?.philhealth_number || "",
+      bank_name: employee?.bank_name || "",
+      account_name: employee?.account_name || "",
+      account_number: employee?.account_number || "",
+      start_date: employee?.start_date || "",
+      department: employee?.department || "",
+      job_category: employee?.job_category || "",
+      employment_type: employee?.employment_type || "regular",
+      shift_sched: employee?.shift_sched || "morning",
+      basic_salary: employee?.basic_salary ? parseFloat(employee.basic_salary as unknown as string) : 0,
+      role: employee?.role || "Employee",
+      manager_id: employee?.manager_id || undefined,
     },
   });
-
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result as string);
-        form.setValue("photo_url", reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
   const handleSubmit = async (data: z.infer<typeof employeeSchema>) => {
     await onSubmit(data as EmployeeFormData);
@@ -116,36 +134,19 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Employ
 
           {/* Personal Information Tab */}
           <TabsContent value="personal" className="space-y-6 pt-6">
-            {/* Photo Upload */}
+            {/* Profile Avatar */}
             <div className="flex items-center gap-6">
               <div className="relative">
                 <Avatar className="h-24 w-24 border-4 border-primary/20">
-                  {photoPreview ? (
-                    <img src={photoPreview} alt="Preview" className="object-cover" />
-                  ) : (
-                    <AvatarFallback className="bg-primary/10 text-primary text-2xl font-semibold">
-                      {firstName?.[0] || "?"}{lastName?.[0] || "?"}
-                    </AvatarFallback>
-                  )}
+                  <AvatarFallback className="bg-primary/10 text-primary text-2xl font-semibold">
+                    {firstName?.[0] || "?"}{lastName?.[0] || "?"}
+                  </AvatarFallback>
                 </Avatar>
-                <label
-                  htmlFor="photo-upload"
-                  className="absolute bottom-0 right-0 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-colors hover:bg-primary/90"
-                >
-                  <Camera className="h-4 w-4" />
-                  <input
-                    id="photo-upload"
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handlePhotoChange}
-                  />
-                </label>
               </div>
               <div>
                 <h4 className="font-medium text-card-foreground">Profile Photo</h4>
                 <p className="text-sm text-muted-foreground">
-                  JPG, PNG or GIF. Max size 2MB.
+                  Photo upload feature coming soon.
                 </p>
               </div>
             </div>
@@ -181,7 +182,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Employ
             </div>
 
             {/* Personal Details */}
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2">
               <FormField
                 control={form.control}
                 name="date_of_birth"
@@ -191,28 +192,6 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Employ
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="gender"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Gender *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select gender" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="male">Male</SelectItem>
-                        <SelectItem value="female">Female</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -235,7 +214,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Employ
             {/* Address */}
             <FormField
               control={form.control}
-              name="address"
+              name="home_address"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Address *</FormLabel>
@@ -246,48 +225,6 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Employ
                 </FormItem>
               )}
             />
-
-            <div className="grid gap-4 sm:grid-cols-3">
-              <FormField
-                control={form.control}
-                name="city"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>City *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="City" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="province"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Province *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Province" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="zip_code"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Zip Code *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Zip Code" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
           </TabsContent>
 
           {/* Employment Tab */}
@@ -295,7 +232,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Employ
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField
                 control={form.control}
-                name="department_id"
+                name="department"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Department *</FormLabel>
@@ -306,7 +243,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Employ
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {departments.map((dept) => (
+                        {departmentOptions.map((dept) => (
                           <SelectItem key={dept.id} value={dept.id}>
                             {dept.name}
                           </SelectItem>
@@ -319,13 +256,30 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Employ
               />
               <FormField
                 control={form.control}
-                name="position"
+                name="job_category"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Position *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., Front Desk Manager" {...field} />
-                    </FormControl>
+                    <FormLabel>Job Category *</FormLabel>
+                    <Select onValueChange={(value) => {
+                      field.onChange(value);
+                      const selectedCategory = jobCategoryOptions.find(cat => cat.id === value);
+                      if (selectedCategory) {
+                        form.setValue('basic_salary', selectedCategory.salary);
+                      }
+                    }} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select job category" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {jobCategoryOptions.map((category) => (
+                          <SelectItem key={category.id} value={category.id}>
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -346,9 +300,10 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Employ
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="full-time">Full-time</SelectItem>
-                        <SelectItem value="part-time">Part-time</SelectItem>
-                        <SelectItem value="contract">Contract</SelectItem>
+                        <SelectItem value="regular">Regular</SelectItem>
+                        <SelectItem value="probationary">Probationary</SelectItem>
+                        <SelectItem value="contractual">Contractual</SelectItem>
+                        <SelectItem value="part_time">Part Time</SelectItem>
                         <SelectItem value="intern">Intern</SelectItem>
                       </SelectContent>
                     </Select>
@@ -358,13 +313,22 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Employ
               />
               <FormField
                 control={form.control}
-                name="hire_date"
+                name="shift_sched"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Hire Date *</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
+                    <FormLabel>Shift Schedule *</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select shift" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="morning">Morning</SelectItem>
+                        <SelectItem value="afternoon">Afternoon</SelectItem>
+                        <SelectItem value="night">Night</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -374,12 +338,12 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Employ
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField
                 control={form.control}
-                name="salary"
+                name="start_date"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Monthly Salary (₱) *</FormLabel>
+                    <FormLabel>Start Date *</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="0" {...field} />
+                      <Input type="date" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -387,23 +351,13 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Employ
               />
               <FormField
                 control={form.control}
-                name="status"
+                name="basic_salary"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Status *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="on_leave">On Leave</SelectItem>
-                        <SelectItem value="suspended">Suspended</SelectItem>
-                        <SelectItem value="terminated">Terminated</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>Monthly Salary (₱) *</FormLabel>
+                    <FormControl>
+                      <Input type="number" placeholder="0" {...field} readOnly className="bg-muted" />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -415,7 +369,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Employ
           <TabsContent value="contact" className="space-y-6 pt-6">
             <FormField
               control={form.control}
-              name="phone"
+              name="phone_number"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Phone Number *</FormLabel>
@@ -445,7 +399,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Employ
                 />
                 <FormField
                   control={form.control}
-                  name="emergency_contact_phone"
+                  name="emergency_contact_number"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Contact Phone</FormLabel>

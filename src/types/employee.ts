@@ -31,7 +31,7 @@ export interface Employee {
   department: string;
   job_category: string;
   employment_type: "regular" | "probationary" | "contractual" | "part_time" | "intern";
-  reporting_manager: string | null;
+  shift_sched: "morning" | "afternoon" | "night";
   basic_salary: string;
   photo_path: string | null;
   full_name?: string;
@@ -65,7 +65,7 @@ export interface EmployeeFormData {
   department: string;
   job_category: string;
   employment_type: Employee["employment_type"];
-  reporting_manager?: string;
+  shift_sched: Employee["shift_sched"];
   basic_salary: number;
   role?: Employee["role"];
   manager_id?: number;

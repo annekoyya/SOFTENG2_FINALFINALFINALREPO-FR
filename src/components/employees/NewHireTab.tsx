@@ -143,7 +143,8 @@ export default function NewHireTab() {
     setLoading(true);
     try {
       const res = await authFetch("/api/new-hires");
-      setHires(await res.json());
+      const response = await res.json();
+      setHires(Array.isArray(response.data) ? response.data : []);
     } finally { setLoading(false); }
   };
 

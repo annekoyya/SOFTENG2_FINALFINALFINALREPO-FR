@@ -39,25 +39,28 @@ const statusLabels = {
 };
 
 export function EmployeeDetails({ employee, onEdit, onClose }: EmployeeDetailsProps) {
+  // Format salary helper
+  const formatSalary = (salary: number | string | undefined) => {
+    if (!salary) return '0';
+    const numSalary = typeof salary === 'string' ? parseFloat(salary) : salary;
+    return numSalary.toLocaleString();
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-4">
           <Avatar className="h-20 w-20 border-4 border-primary/20">
-            {employee.photo_url ? (
-              <img src={employee.photo_url} alt={`${employee.first_name} ${employee.last_name}`} className="object-cover" />
-            ) : (
-              <AvatarFallback className="bg-primary/10 text-primary text-2xl font-semibold">
-                {employee.first_name[0]}{employee.last_name[0]}
-              </AvatarFallback>
-            )}
+            <AvatarFallback className="bg-primary/10 text-primary text-2xl font-semibold">
+              {employee.first_name[0]}{employee.last_name[0]}
+            </AvatarFallback>
           </Avatar>
           <div>
             <h2 className="font-display text-2xl font-semibold text-card-foreground">
               {employee.first_name} {employee.last_name}
             </h2>
-            <p className="text-muted-foreground">{employee.employee_id}</p>
+            <p className="text-muted-foreground">{employee.id || 'N/A'}</p>
             <Badge
               variant="outline"
               className={cn("mt-2 capitalize", statusStyles[employee.status])}
@@ -97,13 +100,13 @@ export function EmployeeDetails({ employee, onEdit, onClose }: EmployeeDetailsPr
                 <div className="flex items-center gap-3 text-sm">
                   <Phone className="h-4 w-4 text-muted-foreground" />
                   <span className="text-muted-foreground">Phone:</span>
-                  <span>{employee.phone}</span>
+                  <span>{employee.phone_number || 'N/A'}</span>
                 </div>
                 <div className="flex items-start gap-3 text-sm">
                   <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
                   <span className="text-muted-foreground">Address:</span>
                   <span className="flex-1">
-                    {employee.address}, {employee.city}, {employee.province} {employee.zip_code}
+                    {employee.home_address || 'N/A'}
                   </span>
                 </div>
               </div>
@@ -117,17 +120,12 @@ export function EmployeeDetails({ employee, onEdit, onClose }: EmployeeDetailsPr
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <span className="text-muted-foreground">Date of Birth:</span>
                   <span>
-                    {new Date(employee.date_of_birth).toLocaleDateString("en-PH", {
+                    {employee.date_of_birth ? new Date(employee.date_of_birth).toLocaleDateString("en-PH", {
                       year: "numeric",
                       month: "long",
                       day: "numeric",
-                    })}
+                    }) : 'N/A'}
                   </span>
-                </div>
-                <div className="flex items-center gap-3 text-sm">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Gender:</span>
-                  <span className="capitalize">{employee.gender}</span>
                 </div>
               </div>
             </div>
@@ -147,7 +145,7 @@ export function EmployeeDetails({ employee, onEdit, onClose }: EmployeeDetailsPr
                 </div>
                 <div>
                   <span className="text-muted-foreground">Phone: </span>
-                  <span>{employee.emergency_contact_phone}</span>
+                  <span>{employee.emergency_contact_number || 'N/A'}</span>
                 </div>
               </div>
             </div>
@@ -163,17 +161,22 @@ export function EmployeeDetails({ employee, onEdit, onClose }: EmployeeDetailsPr
                 <div className="flex items-center gap-3 text-sm">
                   <Building2 className="h-4 w-4 text-muted-foreground" />
                   <span className="text-muted-foreground">Department:</span>
-                  <span>{employee.department_name}</span>
+                  <span>{employee.department || 'N/A'}</span>
                 </div>
                 <div className="flex items-center gap-3 text-sm">
                   <Briefcase className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Position:</span>
-                  <span>{employee.position}</span>
+                  <span className="text-muted-foreground">Job Category:</span>
+                  <span>{employee.job_category || 'N/A'}</span>
                 </div>
                 <div className="flex items-center gap-3 text-sm">
                   <User className="h-4 w-4 text-muted-foreground" />
                   <span className="text-muted-foreground">Employment Type:</span>
-                  <span className="capitalize">{employee.employment_type}</span>
+                  <span className="capitalize">{employee.employment_type || 'N/A'}</span>
+                </div>
+                <div className="flex items-center gap-3 text-sm">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">Shift Schedule:</span>
+                  <span className="capitalize">{employee.shift_sched || 'N/A'}</span>
                 </div>
               </div>
             </div>
@@ -185,18 +188,18 @@ export function EmployeeDetails({ employee, onEdit, onClose }: EmployeeDetailsPr
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
                   <span className="text-muted-foreground">Monthly Salary:</span>
                   <span className="font-semibold text-primary">
-                    ₱{employee.salary.toLocaleString()}
+                    ₱{formatSalary(employee.basic_salary)}
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-sm">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Hire Date:</span>
+                  <span className="text-muted-foreground">Start Date:</span>
                   <span>
-                    {new Date(employee.hire_date).toLocaleDateString("en-PH", {
+                    {employee.start_date ? new Date(employee.start_date).toLocaleDateString("en-PH", {
                       year: "numeric",
                       month: "long",
                       day: "numeric",
-                    })}
+                    }) : 'N/A'}
                   </span>
                 </div>
               </div>
@@ -206,35 +209,13 @@ export function EmployeeDetails({ employee, onEdit, onClose }: EmployeeDetailsPr
 
         {/* Documents Tab */}
         <TabsContent value="documents" className="space-y-6 pt-6">
-          {employee.documents && employee.documents.length > 0 ? (
-            <div className="space-y-3">
-              {employee.documents.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="flex items-center justify-between rounded-lg border border-border bg-card p-4"
-                >
-                  <div className="flex items-center gap-3">
-                    <FileText className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium text-card-foreground">{doc.name}</p>
-                      <p className="text-sm text-muted-foreground capitalize">{doc.type}</p>
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="sm">
-                    Download
-                  </Button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-lg border border-dashed border-border bg-muted/30 p-8 text-center">
-              <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
-              <p className="mt-4 font-medium text-card-foreground">No documents uploaded</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Documents like resume, contracts, and IDs will appear here.
-              </p>
-            </div>
-          )}
+          <div className="rounded-lg border border-dashed border-border bg-muted/30 p-8 text-center">
+            <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
+            <p className="mt-4 font-medium text-card-foreground">No documents uploaded</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Documents like resume, contracts, and IDs will appear here.
+            </p>
+          </div>
         </TabsContent>
       </Tabs>
 

@@ -3,64 +3,91 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle, XCircle, AlertCircle, Clock } from "lucide-react";
 import {
-  OT_TYPE_LABELS, OT_MULTIPLIERS,
-  type OvertimeRequest, type OvertimeStatus, type OvertimeType,
+  OT_TYPE_LABELS,
+  OT_MULTIPLIERS,
+  type OvertimeRequest,
+  type OvertimeStatus,
+  type OvertimeType,
 } from "@/types/overtime";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: OvertimeStatus }) {
   const map: Record<OvertimeStatus, string> = {
-    pending:  "bg-amber-50 text-amber-700 border-amber-200",
+    pending: "bg-amber-50 text-amber-700 border-amber-200",
     approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
     rejected: "bg-red-50 text-red-600 border-red-200",
-    paid:     "bg-violet-50 text-violet-700 border-violet-200",
+    paid: "bg-violet-50 text-violet-700 border-violet-200",
   };
   return (
-    <Badge className={`${map[status]} border rounded-full text-xs font-medium px-2 py-0.5 capitalize`}>
+    <Badge
+      className={`${map[status]} border rounded-full text-xs font-medium px-2 py-0.5 capitalize`}
+    >
       {status}
     </Badge>
   );
 }
 
-function formatPHP(n: number) {
+function formatPHP(n: number): string {
   return `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
 }
 
 // ── approve dialog (lets manager adjust hours before approving) ───────────────
 
-function ApproveDialog({
-  request, open, onClose, onApprove,
-}: {
+interface ApproveDialogProps {
   request: OvertimeRequest;
   open: boolean;
   onClose: () => void;
   onApprove: (id: number, hours: number) => Promise<void>;
-}) {
+}
+
+function ApproveDialog({
+  request,
+  open,
+  onClose,
+  onApprove,
+}: ApproveDialogProps) {
   const { toast } = useToast();
-  const [hours, setHours] = useState(String(request.hours_requested));
-  const [loading, setLoading] = useState(false);
+  const [hours, setHours] = useState<string>(String(request.hours_requested));
+  const [loading, setLoading] = useState<boolean>(false);
 
   const parsed = parseFloat(hours) || 0;
-  const mult   = OT_MULTIPLIERS[request.overtime_type];
+  const mult = OT_MULTIPLIERS[request.overtime_type];
   const amount = request.computed_amount
     ? (parsed / request.hours_requested) * request.computed_amount
     : null;
 
-  const handleApprove = async () => {
+  const handleApprove = async (): Promise<void> => {
     if (parsed <= 0 || parsed > 12) {
-      toast({ title: "Hours must be between 0.5 and 12.", variant: "destructive" }); return;
+      toast({
+        title: "Hours must be between 0.5 and 12.",
+        variant: "destructive",
+      });
+      return;
     }
     setLoading(true);
     try {
@@ -68,11 +95,13 @@ function ApproveDialog({
       onClose();
     } catch {
       toast({ title: "Failed to approve.", variant: "destructive" });
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <Dialog open={open} onOpenChange={(v: boolean) => !v && onClose()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>Approve overtime — {request.employee_name}</DialogTitle>
@@ -81,7 +110,11 @@ function ApproveDialog({
           <div className="rounded-lg bg-muted/40 p-3 space-y-1">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Date</span>
-              <span>{new Date(request.date).toLocaleDateString("en-PH", { dateStyle: "medium" })}</span>
+              <span>
+                {new Date(request.date).toLocaleDateString("en-PH", {
+                  dateStyle: "medium",
+                })}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Type</span>
@@ -95,23 +128,38 @@ function ApproveDialog({
           <div className="space-y-1.5">
             <label className="text-sm font-medium">
               Hours to approve
-              <span className="text-xs text-muted-foreground ml-1">(can be less than requested)</span>
+              <span className="text-xs text-muted-foreground ml-1">
+                (can be less than requested)
+              </span>
             </label>
             <div className="flex items-center gap-2">
-              <Input type="number" min="0.5" max="12" step="0.5"
-                value={hours} onChange={(e) => setHours(e.target.value)}
-                className="w-24" />
+              <Input
+                type="number"
+                min="0.5"
+                max="12"
+                step="0.5"
+                value={hours}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setHours(e.target.value)
+                }
+                className="w-24"
+              />
               {amount && (
-                <span className="text-sm text-emerald-600 font-medium">{formatPHP(amount)}</span>
+                <span className="text-sm text-emerald-600 font-medium">
+                  {formatPHP(amount)}
+                </span>
               )}
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            Multiplier: {mult}× — approved hours will be included in the next payslip compute.
+            Multiplier: {mult}× — approved hours will be included in the next
+            payslip compute.
           </p>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={loading}>Cancel</Button>
+          <Button variant="outline" onClick={onClose} disabled={loading}>
+            Cancel
+          </Button>
           <Button onClick={handleApprove} disabled={loading}>
             {loading ? "Approving…" : "Approve"}
           </Button>
@@ -123,37 +171,54 @@ function ApproveDialog({
 
 // ── reject dialog ─────────────────────────────────────────────────────────────
 
-function RejectDialog({
-  open, onClose, onReject,
-}: {
+interface RejectDialogProps {
   open: boolean;
   onClose: () => void;
   onReject: (reason: string) => Promise<void>;
-}) {
+}
+
+function RejectDialog({ open, onClose, onReject }: RejectDialogProps) {
   const { toast } = useToast();
-  const [reason, setReason] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [reason, setReason] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
+
+  const handleReject = async (): Promise<void> => {
+    if (!reason.trim()) {
+      toast({ title: "Reason required.", variant: "destructive" });
+      return;
+    }
+    setLoading(true);
+    try {
+      await onReject(reason);
+      onClose();
+    } catch {
+      toast({ title: "Failed.", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+    <Dialog open={open} onOpenChange={(v: boolean) => !v && onClose()}>
       <DialogContent className="sm:max-w-sm">
-        <DialogHeader><DialogTitle>Reject overtime request</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Reject overtime request</DialogTitle>
+        </DialogHeader>
         <div className="space-y-2 py-2">
           <label className="text-sm font-medium">Reason</label>
-          <Input placeholder="e.g. Not pre-approved, no business need…"
-            value={reason} onChange={(e) => setReason(e.target.value)} />
+          <Input
+            placeholder="e.g. Not pre-approved, no business need…"
+            value={reason}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setReason(e.target.value)
+            }
+          />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={loading}>Cancel</Button>
-          <Button variant="destructive" disabled={loading} onClick={async () => {
-            if (!reason.trim()) {
-              toast({ title: "Reason required.", variant: "destructive" }); return;
-            }
-            setLoading(true);
-            try { await onReject(reason); onClose(); }
-            catch { toast({ title: "Failed.", variant: "destructive" }); }
-            finally { setLoading(false); }
-          }}>
+          <Button variant="outline" onClick={onClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={handleReject} disabled={loading}>
             {loading ? "Rejecting…" : "Reject"}
           </Button>
         </DialogFooter>
@@ -165,7 +230,7 @@ function RejectDialog({
 // ── main component ────────────────────────────────────────────────────────────
 
 type FilterStatus = OvertimeStatus | "all";
-type FilterType   = OvertimeType   | "all";
+type FilterType = OvertimeType | "all";
 
 interface OvertimeTableProps {
   requests: OvertimeRequest[];
@@ -177,38 +242,49 @@ interface OvertimeTableProps {
 }
 
 export default function OvertimeTable({
-  requests, isLoading, canManage, onApprove, onReject, onRefresh,
+  requests,
+  isLoading,
+  canManage,
+  onApprove,
+  onReject,
+  onRefresh,
 }: OvertimeTableProps) {
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
-  const [typeFilter,   setTypeFilter]   = useState<FilterType>("all");
+  const [typeFilter, setTypeFilter] = useState<FilterType>("all");
   const [approving, setApproving] = useState<OvertimeRequest | null>(null);
-  const [rejectingId, setRejectingId]  = useState<number | null>(null);
+  const [rejectingId, setRejectingId] = useState<number | null>(null);
 
-  const filtered = requests.filter((r) =>
-    (statusFilter === "all" || r.status === statusFilter) &&
-    (typeFilter   === "all" || r.overtime_type === typeFilter)
+  const filtered = requests.filter(
+    (r: OvertimeRequest) =>
+      (statusFilter === "all" || r.status === statusFilter) &&
+      (typeFilter === "all" || r.overtime_type === typeFilter)
   );
 
-  const pendingCount  = requests.filter((r) => r.status === "pending").length;
+  const pendingCount = requests.filter((r: OvertimeRequest) => r.status === "pending")
+    .length;
   const approvedHours = requests
-    .filter((r) => r.status === "approved")
-    .reduce((s, r) => s + (r.hours_approved ?? r.hours_requested), 0);
+    .filter((r: OvertimeRequest) => r.status === "approved")
+    .reduce((s: number, r: OvertimeRequest) => s + (r.hours_approved ?? r.hours_requested), 0);
 
-  const handleApprove = async (id: number, hours: number) => {
+  const handleApprove = async (id: number, hours: number): Promise<void> => {
     try {
       await onApprove(id, hours);
       toast({ title: "Overtime approved. Will be included in next payslip." });
       onRefresh();
-    } catch { toast({ title: "Failed.", variant: "destructive" }); }
+    } catch {
+      toast({ title: "Failed.", variant: "destructive" });
+    }
   };
 
-  const handleReject = async (id: number, reason: string) => {
+  const handleReject = async (id: number, reason: string): Promise<void> => {
     try {
       await onReject(id, reason);
       toast({ title: "Overtime request rejected." });
       onRefresh();
-    } catch { toast({ title: "Failed.", variant: "destructive" }); }
+    } catch {
+      toast({ title: "Failed.", variant: "destructive" });
+    }
   };
 
   return (
@@ -231,21 +307,37 @@ export default function OvertimeTable({
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-0.5 bg-muted/50 p-1 rounded-lg">
-          {(["all","pending","approved","rejected","paid"] as FilterStatus[]).map((s) => (
-            <button key={s} onClick={() => setStatusFilter(s)}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition-all capitalize ${
-                statusFilter === s ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}>{s}</button>
-          ))}
+          {(["all", "pending", "approved", "rejected", "paid"] as FilterStatus[]).map(
+            (s: FilterStatus) => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-all capitalize ${
+                  statusFilter === s
+                    ? "bg-background shadow-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {s}
+              </button>
+            )
+          )}
         </div>
-        <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as FilterType)}>
+        <Select
+          value={typeFilter}
+          onValueChange={(v: string) => setTypeFilter(v as FilterType)}
+        >
           <SelectTrigger className="h-8 w-44 text-xs">
             <SelectValue placeholder="All types" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All types</SelectItem>
-            {(Object.entries(OT_TYPE_LABELS) as [OvertimeType, string][]).map(([v, l]) => (
-              <SelectItem key={v} value={v}>{l}</SelectItem>
+            {(
+              Object.entries(OT_TYPE_LABELS) as [OvertimeType, string][]
+            ).map(([v, l]: [OvertimeType, string]) => (
+              <SelectItem key={v} value={v}>
+                {l}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -256,93 +348,168 @@ export default function OvertimeTable({
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              {canManage && <TableHead className="text-xs text-muted-foreground font-medium">Employee</TableHead>}
-              <TableHead className="text-xs text-muted-foreground font-medium">Date</TableHead>
-              <TableHead className="text-xs text-muted-foreground font-medium">Type</TableHead>
-              <TableHead className="text-xs text-muted-foreground font-medium text-center">Req. hrs</TableHead>
-              <TableHead className="text-xs text-muted-foreground font-medium text-center">Appr. hrs</TableHead>
-              <TableHead className="text-xs text-muted-foreground font-medium text-right">Est. pay</TableHead>
-              <TableHead className="text-xs text-muted-foreground font-medium">Reason</TableHead>
-              <TableHead className="text-xs text-muted-foreground font-medium">Status</TableHead>
-              {canManage && <TableHead className="text-xs text-muted-foreground font-medium text-right">Actions</TableHead>}
+              {canManage && (
+                <TableHead className="text-xs text-muted-foreground font-medium">
+                  Employee
+                </TableHead>
+              )}
+              <TableHead className="text-xs text-muted-foreground font-medium">
+                Date
+              </TableHead>
+              <TableHead className="text-xs text-muted-foreground font-medium">
+                Type
+              </TableHead>
+              <TableHead className="text-xs text-muted-foreground font-medium text-center">
+                Req. hrs
+              </TableHead>
+              <TableHead className="text-xs text-muted-foreground font-medium text-center">
+                Appr. hrs
+              </TableHead>
+              <TableHead className="text-xs text-muted-foreground font-medium text-right">
+                Est. pay
+              </TableHead>
+              <TableHead className="text-xs text-muted-foreground font-medium">
+                Reason
+              </TableHead>
+              <TableHead className="text-xs text-muted-foreground font-medium">
+                Status
+              </TableHead>
+              {canManage && (
+                <TableHead className="text-xs text-muted-foreground font-medium text-right">
+                  Actions
+                </TableHead>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={canManage ? 9 : 7} className="text-center py-10 text-sm text-muted-foreground">Loading…</TableCell></TableRow>
-            ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={canManage ? 9 : 7} className="text-center py-10 text-sm text-muted-foreground">No overtime requests found.</TableCell></TableRow>
-            ) : filtered.map((r) => (
-              <TableRow key={r.id} className="text-sm hover:bg-muted/20">
-                {canManage && (
-                  <TableCell className="font-medium">
-                    {r.employee_name}
-                    {r.department && <span className="block text-xs text-muted-foreground">{r.department}</span>}
-                  </TableCell>
-                )}
-                <TableCell className="text-xs">
-                  {new Date(r.date).toLocaleDateString("en-PH", { dateStyle: "medium" })}
+              <TableRow>
+                <TableCell
+                  colSpan={canManage ? 9 : 7}
+                  className="text-center py-10 text-sm text-muted-foreground"
+                >
+                  Loading…
                 </TableCell>
-                <TableCell className="text-xs">{OT_TYPE_LABELS[r.overtime_type]}</TableCell>
-                <TableCell className="text-center font-mono">{r.hours_requested}</TableCell>
-                <TableCell className="text-center font-mono">
-                  {r.hours_approved != null ? (
-                    <span className={r.hours_approved < r.hours_requested ? "text-amber-600" : ""}>
-                      {r.hours_approved}
-                    </span>
-                  ) : "—"}
-                </TableCell>
-                <TableCell className="text-right font-mono text-xs">
-                  {r.computed_amount ? formatPHP(r.computed_amount) : "—"}
-                </TableCell>
-                <TableCell className="max-w-[160px] truncate text-xs text-muted-foreground">
-                  {r.reason}
-                </TableCell>
-                <TableCell>
-                  <StatusBadge status={r.status} />
-                  {r.rejected_reason && (
-                    <p className="text-[10px] text-red-500 mt-0.5 max-w-[120px] truncate">{r.rejected_reason}</p>
-                  )}
-                </TableCell>
-                {canManage && (
-                  <TableCell className="text-right">
-                    {r.status === "pending" ? (
-                      <div className="flex items-center justify-end gap-1">
-                        <Button size="sm" variant="ghost"
-                          className="h-7 px-2 text-emerald-600 hover:bg-emerald-50"
-                          onClick={() => setApproving(r)}>
-                          <CheckCircle className="w-3.5 h-3.5 mr-1" />Approve
-                        </Button>
-                        <Button size="sm" variant="ghost"
-                          className="h-7 px-2 text-red-500 hover:bg-red-50"
-                          onClick={() => setRejectingId(r.id)}>
-                          <XCircle className="w-3.5 h-3.5 mr-1" />Reject
-                        </Button>
-                      </div>
-                    ) : r.status === "approved" ? (
-                      <span className="text-xs text-muted-foreground">
-                        {r.approved_by_name ? `By ${r.approved_by_name}` : "Approved"}
-                      </span>
-                    ) : r.status === "paid" ? (
-                      <span className="text-xs text-violet-600">In payslip</span>
-                    ) : null}
-                  </TableCell>
-                )}
               </TableRow>
-            ))}
+            ) : filtered.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={canManage ? 9 : 7}
+                  className="text-center py-10 text-sm text-muted-foreground"
+                >
+                  No overtime requests found.
+                </TableCell>
+              </TableRow>
+            ) : (
+              filtered.map((r: OvertimeRequest) => (
+                <TableRow key={r.id} className="text-sm hover:bg-muted/20">
+                  {canManage && (
+                    <TableCell className="font-medium">
+                      {r.employee_name}
+                      {r.department && (
+                        <span className="block text-xs text-muted-foreground">
+                          {r.department}
+                        </span>
+                      )}
+                    </TableCell>
+                  )}
+                  <TableCell className="text-xs">
+                    {new Date(r.date).toLocaleDateString("en-PH", {
+                      dateStyle: "medium",
+                    })}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {OT_TYPE_LABELS[r.overtime_type]}
+                  </TableCell>
+                  <TableCell className="text-center font-mono">
+                    {r.hours_requested}
+                  </TableCell>
+                  <TableCell className="text-center font-mono">
+                    {r.hours_approved != null ? (
+                      <span
+                        className={
+                          r.hours_approved < r.hours_requested
+                            ? "text-amber-600"
+                            : ""
+                        }
+                      >
+                        {r.hours_approved}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-xs">
+                    {r.computed_amount ? formatPHP(r.computed_amount) : "—"}
+                  </TableCell>
+                  <TableCell className="max-w-[160px] truncate text-xs text-muted-foreground">
+                    {r.reason}
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge status={r.status} />
+                    {r.rejected_reason && (
+                      <p className="text-[10px] text-red-500 mt-0.5 max-w-[120px] truncate">
+                        {r.rejected_reason}
+                      </p>
+                    )}
+                  </TableCell>
+                  {canManage && (
+                    <TableCell className="text-right">
+                      {r.status === "pending" ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-emerald-600 hover:bg-emerald-50"
+                            onClick={() => setApproving(r)}
+                          >
+                            <CheckCircle className="w-3.5 h-3.5 mr-1" />
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-red-500 hover:bg-red-50"
+                            onClick={() => setRejectingId(r.id)}
+                          >
+                            <XCircle className="w-3.5 h-3.5 mr-1" />
+                            Reject
+                          </Button>
+                        </div>
+                      ) : r.status === "approved" ? (
+                        <span className="text-xs text-muted-foreground">
+                          {r.approved_by_name
+                            ? `By ${r.approved_by_name}`
+                            : "Approved"}
+                        </span>
+                      ) : r.status === "paid" ? (
+                        <span className="text-xs text-violet-600">
+                          In payslip
+                        </span>
+                      ) : null}
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </div>
 
       {approving && (
-        <ApproveDialog request={approving} open={!!approving}
+        <ApproveDialog
+          request={approving}
+          open={!!approving}
           onClose={() => setApproving(null)}
-          onApprove={handleApprove} />
+          onApprove={handleApprove}
+        />
       )}
       {rejectingId !== null && (
-        <RejectDialog open={true}
+        <RejectDialog
+          open={true}
           onClose={() => setRejectingId(null)}
-          onReject={(reason) => handleReject(rejectingId, reason)} />
+          onReject={(reason: string) => handleReject(rejectingId, reason)}
+        />
       )}
     </div>
   );

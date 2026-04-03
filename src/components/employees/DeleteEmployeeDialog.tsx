@@ -56,7 +56,7 @@ export function DeleteEmployeeDialog({
                     {employee.first_name} {employee.last_name}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {employee.position} • {employee.department_name}
+                    {employee.job_category || 'N/A'} • {employee.department || 'N/A'}
                   </p>
                 </div>
               </div>

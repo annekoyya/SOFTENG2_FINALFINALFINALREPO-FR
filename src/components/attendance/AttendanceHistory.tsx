@@ -50,7 +50,7 @@ export function AttendanceHistory({
       result = result.filter((record) => record.status === statusFilter);
     }
 
-    // Filter by search
+    // Filter by search - add null safety checks
     if (search) {
       result = result.filter(
         (record) =>
@@ -185,46 +185,91 @@ export function AttendanceHistory({
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((record) => (
-                  <TableRow key={`${record.employee.id}-${record.date}`}>
-                    <TableCell>
-                      <div>
-                        <p className="font-semibold">
-                          {record.employee.first_name} {record.employee.last_name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {record.employee.employee_id}
-                        </p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {record.date ? format(new Date(record.date), "MMM dd, yyyy") : "-"}
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {record.time_in || "-"}
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {record.time_out || "-"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {record.hours_worked ? `${record.hours_worked}h` : "-"}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {record.minutes_late ? (
-                        <span className="font-semibold text-yellow-700">
-                          {record.minutes_late}m
-                        </span>
-                      ) : (
-                        "-"
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge className={getStatusColor(record.status)}>
-                        {getStatusLabel(record.status)}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))
+                filtered.map((record) => {
+                  // Null safety check - if employee doesn't exist, show placeholder
+                  if (!record.employee) {
+                    return (
+                      <TableRow key={`${record.id || Math.random()}-${record.date}`}>
+                        <TableCell>
+                          <div>
+                            <p className="font-semibold">Unknown Employee</p>
+                            <p className="text-xs text-muted-foreground">
+                              Employee data not available
+                            </p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {record.date ? format(new Date(record.date), "MMM dd, yyyy") : "-"}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">
+                          {record.time_in || "-"}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">
+                          {record.time_out || "-"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {record.hours_worked ? `${record.hours_worked}h` : "-"}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {record.minutes_late ? (
+                            <span className="font-semibold text-yellow-700">
+                              {record.minutes_late}m
+                            </span>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge className={getStatusColor(record.status)}>
+                            {getStatusLabel(record.status)}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }
+
+                  // Normal rendering when employee exists
+                  return (
+                    <TableRow key={`${record.employee.id}-${record.date}`}>
+                      <TableCell>
+                        <div>
+                          <p className="font-semibold">
+                            {record.employee.first_name} {record.employee.last_name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {record.employee.id || 'N/A'}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {record.date ? format(new Date(record.date), "MMM dd, yyyy") : "-"}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">
+                        {record.time_in || "-"}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">
+                        {record.time_out || "-"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {record.hours_worked ? `${record.hours_worked}h` : "-"}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {record.minutes_late ? (
+                          <span className="font-semibold text-yellow-700">
+                            {record.minutes_late}m
+                          </span>
+                        ) : (
+                          "-"
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge className={getStatusColor(record.status)}>
+                          {getStatusLabel(record.status)}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>

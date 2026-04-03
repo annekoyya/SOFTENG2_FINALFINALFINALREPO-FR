@@ -31,10 +31,11 @@ export function useRecruitment() {
     try {
       const params = status ? `?status=${status}` : "";
       const res = await authFetch(`${BASE}/job-postings${params}`);
-      const data = await res.json();
-      setJobs(data);
+      const response = await res.json();
+      setJobs(Array.isArray(response) ? response : response.data || []);
     } catch (e: any) {
       setError(e.message);
+      setJobs([]);
     } finally {
       setIsLoading(false);
     }
@@ -83,10 +84,11 @@ export function useRecruitment() {
         const res = await authFetch(
           `${BASE}/applicants?${params.toString()}`
         );
-        const data = await res.json();
-        setApplicants(data);
+        const response = await res.json();
+        setApplicants(Array.isArray(response) ? response : response.data || []);
       } catch (e: any) {
         setError(e.message);
+        setApplicants([]);
       } finally {
         setIsLoading(false);
       }
@@ -140,10 +142,11 @@ export function useRecruitment() {
     try {
       const params = applicantId ? `?applicant_id=${applicantId}` : "";
       const res = await authFetch(`${BASE}/interviews${params}`);
-      const data = await res.json();
-      setInterviews(data);
+      const response = await res.json();
+      setInterviews(Array.isArray(response) ? response : response.data || []);
     } catch (e: any) {
       setError(e.message);
+      setInterviews([]);
     } finally {
       setIsLoading(false);
     }
@@ -181,10 +184,11 @@ export function useRecruitment() {
     setIsLoading(true);
     try {
       const res = await authFetch(`${BASE}/job-offers`);
-      const data = await res.json();
-      setOffers(data);
+      const response = await res.json();
+      setOffers(Array.isArray(response) ? response : response.data || []);
     } catch (e: any) {
       setError(e.message);
+      setOffers([]);
     } finally {
       setIsLoading(false);
     }

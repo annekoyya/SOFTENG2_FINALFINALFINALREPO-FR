@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { EmployeeTable } from "@/components/employees/EmployeeTable";
-import { EmployeeDetails } from "@/components/employees/EmployeeDetails";
 import { useEmployees } from "@/hooks/useEmployees";
+import { useAuth } from "@/hooks/useAuth";
 import { Employee } from "@/types/employee";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +26,8 @@ type ViewMode = "list" | "view";
 
 export default function ArchivedEmployees() {
   const { employees, restoreEmployee, purgeEmployee } = useEmployees();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "Admin";
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
@@ -33,8 +35,8 @@ export default function ArchivedEmployees() {
   const [purgeDialogOpen, setPurgeDialogOpen] = useState(false);
   const [employeeToPurge, setEmployeeToPurge] = useState<Employee | null>(null);
 
-  // Filter archived employees
-  const archivedEmployees = employees.filter((emp) => emp.archived === true);
+  // Filter archived employees - those with deleted_at timestamp (soft deleted)
+  const archivedEmployees = employees.filter((emp) => emp.deleted_at !== null);
 
   const handleView = (employee: Employee) => {
     setSelectedEmployee(employee);
@@ -121,19 +123,31 @@ export default function ArchivedEmployees() {
             isArchivedView={true}
             onRestore={handleRestore}
             onPurge={handlePurge}
+            isAdmin={isAdmin}
           />
         </div>
       )}
 
       {/* View Details Sheet */}
       <Sheet open={viewMode === "view"} onOpenChange={handleCloseSheet}>
-        <SheetContent className="w-full sm:max-w-2xl">
+        <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
           <SheetHeader>
             <SheetTitle>Employee Details</SheetTitle>
           </SheetHeader>
           {selectedEmployee && (
             <div className="mt-6 space-y-6">
-              {/* <EmployeeDetails employee={selectedEmployee} /> */}
+              {/* Display employee basic info */}
+              <div className="space-y-4">
+                <div className="rounded-lg bg-muted/50 p-4">
+                  <h3 className="font-semibold mb-2">Employee Information</h3>
+                  <div className="space-y-2 text-sm">
+                    <p><span className="text-muted-foreground">Name:</span> {selectedEmployee.first_name} {selectedEmployee.last_name}</p>
+                    <p><span className="text-muted-foreground">Email:</span> {selectedEmployee.email}</p>
+                    <p><span className="text-muted-foreground">Department:</span> {selectedEmployee.department || 'N/A'}</p>
+                    <p><span className="text-muted-foreground">Position:</span> {selectedEmployee.job_category || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
 
               {/* Archived Info */}
               <div className="rounded-lg border border-warning/20 bg-warning/5 p-4">
@@ -144,17 +158,7 @@ export default function ArchivedEmployees() {
                       Archived Record
                     </h4>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      This employee record was archived on{" "}
-                      {selectedEmployee.archived_at
-                        ? new Date(
-                            selectedEmployee.archived_at
-                          ).toLocaleDateString("en-US", {
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                          })
-                        : "Unknown date"}
-                      . You can restore or permanently delete this record.
+                      This employee record has been archived. You can restore or permanently delete this record.
                     </p>
                   </div>
                 </div>

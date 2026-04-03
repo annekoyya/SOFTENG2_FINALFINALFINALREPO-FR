@@ -289,5 +289,113 @@ public function import(Request $request): JsonResponse
         return $this->success($leaveRequest->load('approver'), 'Leave request rejected');
     }
 
+    /**
+     * Get attendance records for a date range.
+     * GET /api/attendance
+     */
+    public function getAttendance(Request $request): JsonResponse
+    {
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+        $employeeId = $request->query('employee_id');
+
+        $query = Attendance::with('employee');
+
+        if ($startDate) {
+            $query->where('date', '>=', $startDate);
+        }
+        if ($endDate) {
+            $query->where('date', '<=', $endDate);
+        }
+        if ($employeeId) {
+            $query->where('employee_id', $employeeId);
+        }
+
+        $records = $query->orderBy('date', 'desc')->paginate(50);
+        return $this->success($records);
+    }
+
+    /**
+     * Get monthly attendance statistics for an employee.
+     * GET /api/attendance/monthly-stats
+     */
+    public function getMonthlyStats(Request $request): JsonResponse
+    {
+        $month = $request->query('month', now()->month);
+        $year = $request->query('year', now()->year);
+        $employeeId = Auth::user()->employee?->id;
+
+        if (!$employeeId) {
+            return $this->error('No employee record found', 404);
+        }
+
+        $startDate = Carbon::createFromDate($year, $month, 1)->toDateString();
+        $endDate = Carbon::createFromDate($year, $month, 1)->addMonth()->subDay()->toDateString();
+
+        $records = Attendance::where('employee_id', $employeeId)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->get();
+
+        $stats = [
+            'present' => $records->where('status', 'present')->count(),
+            'late' => $records->where('status', 'late')->count(),
+            'absent' => $records->where('status', 'absent')->count(),
+            'on_leave' => $records->where('status', 'on_leave')->count(),
+            'total_days' => count($records),
+        ];
+
+        return $this->success($stats);
+    }
+
+    /**
+     * Get live attendance status for all employees.
+     * GET /api/attendance/live-status
+     */
+    public function getLiveStatus(Request $request): JsonResponse
+    {
+        $today = now()->toDateString();
+        
+        $attendances = Attendance::where('date', $today)
+            ->with('employee')
+            ->get()
+            ->groupBy(function ($record) {
+                return $record->status;
+            });
+
+        return $this->success([
+            'date' => $today,
+            'present' => $attendances->get('present')?->count() ?? 0,
+            'absent' => $attendances->get('absent')?->count() ?? 0,
+            'late' => $attendances->get('late')?->count() ?? 0,
+            'on_leave' => $attendances->get('on_leave')?->count() ?? 0,
+            'details' => $attendances,
+        ]);
+    }
+
+    /**
+     * Get attendance summary for a period.
+     * GET /api/attendance/summary
+     */
+    public function getSummary(Request $request): JsonResponse
+    {
+        $startDate = $request->query('start_date', now()->subMonth()->toDateString());
+        $endDate = $request->query('end_date', now()->toDateString());
+
+        $records = Attendance::whereBetween('date', [$startDate, $endDate])
+            ->get();
+
+        $summary = [
+            'total_records' => count($records),
+            'present' => $records->where('status', 'present')->count(),
+            'absent' => $records->where('status', 'absent')->count(),
+            'late' => $records->where('status', 'late')->count(),
+            'on_leave' => $records->where('status', 'on_leave')->count(),
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ];
+
+        return $this->success($summary);
+    }
+
     
 }

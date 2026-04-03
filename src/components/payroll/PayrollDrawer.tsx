@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Check, X, FileText, Download } from "lucide-react";
+import { Check, X, FileText } from "lucide-react";
 
 interface PayrollDrawerProps {
   open: boolean;
@@ -70,6 +70,9 @@ export function PayrollDrawer({
 
   const breakdown = payroll.calculation_breakdown;
 
+  // Helper function to safely get amount
+  const getAmount = (item: any) => item??.amount ?? 0 || 0;
+
   return (
     <Sheet open={open} onOpenChange={onClose}>
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
@@ -116,43 +119,43 @@ export function PayrollDrawer({
             <div className="space-y-3">
               <h3 className="font-semibold text-foreground">Earnings</h3>
               <div className="space-y-2">
-                {breakdown.earnings.base_salary?.amount > 0 && (
+                {getAmount(breakdown?.earnings?.base_salary) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">
-                      {breakdown.earnings.base_salary?.label}
+                      {breakdown?.earnings?.base_salary?.label || "Base Salary"}
                     </span>
                     <span className="font-medium">
-                      {formatCurrency(breakdown.earnings.base_salary?.amount)}
+                      {formatCurrency(getAmount(breakdown?.earnings?.base_salary))}
                     </span>
                   </div>
                 )}
-                {breakdown.earnings.overtime_pay?.amount > 0 && (
+                {getAmount(breakdown?.earnings?.overtime_pay) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">
-                      {breakdown.earnings.overtime_pay?.label}
+                      {breakdown?.earnings?.overtime_pay?.label || "Overtime Pay"}
                     </span>
                     <span className="font-medium">
-                      {formatCurrency(breakdown.earnings.overtime_pay?.amount)}
+                      {formatCurrency(getAmount(breakdown?.earnings?.overtime_pay))}
                     </span>
                   </div>
                 )}
-                {breakdown.earnings.bonuses?.amount > 0 && (
+                {getAmount(breakdown?.earnings?.bonuses) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">
-                      {breakdown.earnings.bonuses?.label}
+                      {breakdown?.earnings?.bonuses?.label || "Bonuses"}
                     </span>
                     <span className="font-medium">
-                      {formatCurrency(breakdown.earnings.bonuses?.amount)}
+                      {formatCurrency(getAmount(breakdown?.earnings?.bonuses))}
                     </span>
                   </div>
                 )}
-                {breakdown.earnings.allowances?.amount > 0 && (
+                {getAmount(breakdown?.earnings?.allowances) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">
-                      {breakdown.earnings.allowances?.label}
+                      {breakdown?.earnings?.allowances?.label || "Allowances"}
                     </span>
                     <span className="font-medium">
-                      {formatCurrency(breakdown.earnings.allowances?.amount)}
+                      {formatCurrency(getAmount(breakdown?.earnings?.allowances))}
                     </span>
                   </div>
                 )}
@@ -171,53 +174,53 @@ export function PayrollDrawer({
             <div className="space-y-3">
               <h3 className="font-semibold text-foreground">Deductions</h3>
               <div className="space-y-2">
-                {breakdown.deductions.sss_contribution?.amount > 0 && (
+                {getAmount(breakdown?.deductions?.sss_contribution) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">
-                      {breakdown.deductions.sss_contribution?.label}
+                      {breakdown?.deductions?.sss_contribution?.label || "SSS Contribution"}
                     </span>
-                    <span className="font-medium">
-                      -{formatCurrency(breakdown.deductions.sss_contribution?.amount)}
+                    <span className="font-medium text-destructive">
+                      -{formatCurrency(getAmount(breakdown?.deductions?.sss_contribution))}
                     </span>
                   </div>
                 )}
-                {breakdown.deductions.philhealth_contribution?.amount > 0 && (
+                {getAmount(breakdown?.deductions?.philhealth_contribution) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">
-                      {breakdown.deductions.philhealth_contribution?.label}
+                      {breakdown?.deductions?.philhealth_contribution?.label || "PhilHealth"}
                     </span>
-                    <span className="font-medium">
-                      -{formatCurrency(breakdown.deductions.philhealth_contribution?.amount)}
+                    <span className="font-medium text-destructive">
+                      -{formatCurrency(getAmount(breakdown?.deductions?.philhealth_contribution))}
                     </span>
                   </div>
                 )}
-                {breakdown.deductions.pagibig_contribution?.amount > 0 && (
+                {getAmount(breakdown?.deductions?.pagibig_contribution) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">
-                      {breakdown.deductions.pagibig_contribution?.label}
+                      {breakdown?.deductions?.pagibig_contribution?.label || "Pag-IBIG"}
                     </span>
-                    <span className="font-medium">
-                      -{formatCurrency(breakdown.deductions.pagibig_contribution?.amount)}
+                    <span className="font-medium text-destructive">
+                      -{formatCurrency(getAmount(breakdown?.deductions?.pagibig_contribution))}
                     </span>
                   </div>
                 )}
-                {breakdown.deductions.tax_withholding?.amount > 0 && (
+                {getAmount(breakdown?.deductions?.tax_withholding) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">
-                      {breakdown.deductions.tax_withholding?.label}
+                      {breakdown?.deductions?.tax_withholding?.label || "Withholding Tax"}
                     </span>
-                    <span className="font-medium">
-                      -{formatCurrency(breakdown.deductions.tax_withholding?.amount)}
+                    <span className="font-medium text-destructive">
+                      -{formatCurrency(getAmount(breakdown?.deductions?.tax_withholding))}
                     </span>
                   </div>
                 )}
-                {breakdown.deductions.other_deductions?.amount > 0 && (
+                {getAmount(breakdown?.deductions?.other_deductions) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">
-                      {breakdown.deductions.other_deductions?.label}
+                      {breakdown?.deductions?.other_deductions?.label || "Other Deductions"}
                     </span>
-                    <span className="font-medium">
-                      -{formatCurrency(breakdown.deductions.other_deductions?.amount)}
+                    <span className="font-medium text-destructive">
+                      -{formatCurrency(getAmount(breakdown?.deductions?.other_deductions))}
                     </span>
                   </div>
                 )}
@@ -259,7 +262,7 @@ export function PayrollDrawer({
               {payroll.status === "draft" && onApprove && (
                 <Button
                   onClick={onApprove}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  className="bg-blue-600 hover:bg-blue-700 text-white col-span-2"
                   disabled={isLoading}
                 >
                   <Check className="mr-2 h-4 w-4" />

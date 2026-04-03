@@ -1,7 +1,7 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, Eye } from "lucide-react";
+import { Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const employees = [

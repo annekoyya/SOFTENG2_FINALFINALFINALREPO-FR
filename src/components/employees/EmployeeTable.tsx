@@ -25,9 +25,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, MoreHorizontal, Eye, Pencil, Trash2, Filter } from "lucide-react";
+import { Search, MoreHorizontal, Eye, Pencil, Trash2, Filter, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { departments } from "@/data/mockEmployees";
 
 interface EmployeeTableProps {
   employees: Employee[];
@@ -37,6 +36,7 @@ interface EmployeeTableProps {
   isArchivedView?: boolean;
   onRestore?: (employee: Employee) => void;
   onPurge?: (employee: Employee) => void;
+  isAdmin?: boolean;
 }
 
 const statusStyles = {
@@ -53,9 +53,10 @@ const statusLabels = {
   suspended: "Suspended",
 };
 
-export function EmployeeTable({ employees, onView, onEdit, onDelete, isArchivedView = false, onRestore, onPurge }: EmployeeTableProps) {
+// Status options for filter
+
+export function EmployeeTable({ employees, onView, onEdit, onDelete, isArchivedView = false, onRestore, onPurge, isAdmin = false }: EmployeeTableProps) {
   const [search, setSearch] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const filteredEmployees = employees.filter((employee) => {
@@ -63,15 +64,12 @@ export function EmployeeTable({ employees, onView, onEdit, onDelete, isArchivedV
       employee.first_name.toLowerCase().includes(search.toLowerCase()) ||
       employee.last_name.toLowerCase().includes(search.toLowerCase()) ||
       employee.email.toLowerCase().includes(search.toLowerCase()) ||
-      employee.employee_id.toLowerCase().includes(search.toLowerCase());
-
-    const matchesDepartment =
-      departmentFilter === "all" || employee.department_id === departmentFilter;
+      (employee.id && employee.id.toString().toLowerCase().includes(search.toLowerCase()));
 
     const matchesStatus =
       statusFilter === "all" || employee.status === statusFilter;
 
-    return matchesSearch && matchesDepartment && matchesStatus;
+    return matchesSearch && matchesStatus;
   });
 
   return (
@@ -88,20 +86,6 @@ export function EmployeeTable({ employees, onView, onEdit, onDelete, isArchivedV
           />
         </div>
         <div className="flex gap-2">
-          <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-            <SelectTrigger className="w-[180px]">
-              <Filter className="mr-2 h-4 w-4" />
-              <SelectValue placeholder="Department" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Departments</SelectItem>
-              {departments.map((dept) => (
-                <SelectItem key={dept.id} value={dept.id}>
-                  {dept.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="Status" />
@@ -124,16 +108,16 @@ export function EmployeeTable({ employees, onView, onEdit, onDelete, isArchivedV
             <TableRow className="hover:bg-transparent">
               <TableHead className="w-[300px]">Employee</TableHead>
               <TableHead>Department</TableHead>
-              <TableHead>Position</TableHead>
+              <TableHead>Job Category</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Hire Date</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead>Start Date</TableHead>
+              {isAdmin && <TableHead className="text-right">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredEmployees.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
+                <TableCell colSpan={isAdmin ? 6 : 5} className="h-24 text-center">
                   <p className="text-muted-foreground">No employees found.</p>
                 </TableCell>
               </TableRow>
@@ -157,16 +141,16 @@ export function EmployeeTable({ employees, onView, onEdit, onDelete, isArchivedV
                           {employee.first_name} {employee.last_name}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          {employee.employee_id}
+                          {employee.id}
                         </p>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {employee.department_name}
+                    {employee.department || 'N/A'}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {employee.position}
+                    {employee.job_category || 'N/A'}
                   </TableCell>
                   <TableCell>
                     <Badge
@@ -180,20 +164,21 @@ export function EmployeeTable({ employees, onView, onEdit, onDelete, isArchivedV
                     </Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {new Date(employee.hire_date).toLocaleDateString("en-PH", {
+                    {employee.start_date ? new Date(employee.start_date).toLocaleDateString("en-PH", {
                       year: "numeric",
                       month: "short",
                       day: "numeric",
-                    })}
+                    }) : 'N/A'}
                   </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
+                  {isAdmin && (
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
                         {!isArchivedView ? (
                           <>
                             <DropdownMenuItem onClick={() => onView(employee)}>
@@ -213,23 +198,26 @@ export function EmployeeTable({ employees, onView, onEdit, onDelete, isArchivedV
                             </DropdownMenuItem>
                           </>
                         ) : (
-                          <>
-                            <DropdownMenuItem onClick={() => onRestore && onRestore(employee)}>
-                              <Eye className="mr-2 h-4 w-4" />
-                              Restore
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => onPurge && onPurge(employee)}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Permanently Delete
-                            </DropdownMenuItem>
-                          </>
+                          isAdmin && (
+                            <>
+                              <DropdownMenuItem onClick={() => onRestore && onRestore(employee)}>
+                                <RotateCcw className="mr-2 h-4 w-4" />
+                                Restore
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => onPurge && onPurge(employee)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Permanently Delete
+                              </DropdownMenuItem>
+                            </>
+                          )
                         )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
+                  )}
                 </TableRow>
               ))
             )}

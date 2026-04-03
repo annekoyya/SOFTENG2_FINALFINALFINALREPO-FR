@@ -105,15 +105,15 @@ class Payroll extends Model
 
     /**
      * Recalculate gross = base + overtime + bonuses + allowances.
-     * Assign as float — decimal:2 cast handles formatting on READ, not WRITE.
-     * Never assign (string) to a decimal-cast property — causes type conflict.
+     * Store as string to match decimal:2 cast expectation.
      */
     public function recalculateGross(): void
     {
-        $this->gross_salary = (float) $this->base_salary
+        $gross = (float) $this->base_salary
             + (float) $this->overtime_pay
             + (float) $this->bonuses
             + (float) $this->allowances;
+        $this->gross_salary = number_format($gross, 2, '.', '');
     }
 
     public function recalculateNet(): void
@@ -124,8 +124,9 @@ class Payroll extends Model
             + (float) $this->tax_withholding
             + (float) $this->other_deductions;
 
-        $this->total_deductions = $totalDeductions;
-        $this->net_salary       = (float) $this->gross_salary - $totalDeductions;
+        $this->total_deductions = number_format($totalDeductions, 2, '.', '');
+        $net = (float) $this->gross_salary - $totalDeductions;
+        $this->net_salary = number_format($net, 2, '.', '');
     }
 
     public function recalculate(): void

@@ -52,101 +52,54 @@ class EvaluationFormController extends Controller
     }
 
     /**
-     * Create a new evaluation form with sections, questions and assignments.
+     * Create a new evaluation form.
      * POST /api/evaluations
      */
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'title'                                      => 'required|string|max:200',
-            'description'                                => 'nullable|string|max:1000',
-            'department'                                 => 'required|string|max:100',
-            'deadline'                                   => 'nullable|date',
-            'date_start'                                 => 'nullable|date',
-            'date_end'                                   => 'nullable|date|after_or_equal:date_start',
-            'save_as_draft'                              => 'sometimes|boolean',
-            'evaluator_ids'                              => 'required|array|min:1',
-            'evaluator_ids.*'                            => 'exists:users,id',
-
-            // Sections
-            'sections'                                   => 'required|array|min:1',
-            'sections.*.title'                           => 'required|string|max:200',
-            'sections.*.description'                     => 'nullable|string|max:500',
-            'sections.*.type'                            => 'required|in:likert,open_ended',
-            'sections.*.order'                           => 'sometimes|integer',
-
-            // Likert options per section
-            'sections.*.likert_options'                  => 'sometimes|array',
-            'sections.*.likert_options.*.label'          => 'required|string|max:50',
-            'sections.*.likert_options.*.value'          => 'required|integer|min:0',
-
-            // Questions per section
-            'sections.*.questions'                       => 'required|array|min:1',
-            'sections.*.questions.*.text'                => 'required|string|max:500',
-            'sections.*.questions.*.type'                => 'required|in:likert,open_ended',
-            'sections.*.questions.*.order'               => 'sometimes|integer',
+            'title'           => 'required|string|max:200',
+            'description'     => 'nullable|string|max:1000',
+            'department'      => 'required|string|max:100',
+            'period_start'    => 'nullable|date',
+            'period_end'      => 'nullable|date|after_or_equal:period_start',
+            'evaluator_ids'   => 'required|array|min:1',
+            'evaluator_ids.*' => 'exists:users,id',
         ]);
 
         $form = DB::transaction(function () use ($validated) {
-            // 1. Create the form
+            // Create the form with no sections/questions (simplified)
             $form = EvaluationForm::create([
                 'title'       => $validated['title'],
                 'description' => $validated['description'] ?? null,
                 'department'  => $validated['department'],
-                'deadline'    => $validated['deadline'] ?? null,
-                'date_start'  => $validated['date_start'] ?? null,
-                'date_end'    => $validated['date_end'] ?? null,
+                'period_start'  => $validated['period_start'] ?? null,
+                'period_end'    => $validated['period_end'] ?? null,
                 'created_by'  => Auth::id(),
-                'status'      => ($validated['save_as_draft'] ?? false) ? 'draft' : 'active',
+                'status'      => 'active',
+            ]);
+
+            // Create assignments for each evaluator
+            foreach ($validated['evaluator_ids'] as $evaluatorId) {
+                EvaluationAssignment::create([
+                    'form_id'      => $form->id,
+                    'evaluator_id' => $evaluatorId,
+                    'status'       => 'pending',
+                ]);
+            }
+
+            return $form;
+        });
+
+        return $this->created($form->load(['creator', 'assignments']), 'Evaluation form created');
+    }
             ]);
 
             // 2. Create sections with questions and likert options
             foreach ($validated['sections'] as $sIdx => $sData) {
-                $section = EvaluationSection::create([
-                    'evaluation_form_id' => $form->id,
-                    'title'              => $sData['title'],
-                    'description'        => $sData['description'] ?? null,
-                    'type'               => $sData['type'],
-                    'order'              => $sData['order'] ?? $sIdx,
-                ]);
 
-                // Likert options (column headers)
-                if (!empty($sData['likert_options'])) {
-                    foreach ($sData['likert_options'] as $oIdx => $opt) {
-                        EvaluationLikertOption::create([
-                            'evaluation_section_id' => $section->id,
-                            'label'                 => $opt['label'],
-                            'value'                 => $opt['value'],
-                            'order'                 => $oIdx,
-                        ]);
-                    }
-                }
 
-                // Questions (rows)
-                foreach ($sData['questions'] as $qIdx => $qData) {
-                    EvaluationQuestion::create([
-                        'evaluation_section_id' => $section->id,
-                        'text'                  => $qData['text'],
-                        'type'                  => $qData['type'],
-                        'order'                 => $qData['order'] ?? $qIdx,
-                    ]);
-                }
-            }
-
-            // 3. Assign HR evaluators
-            foreach ($validated['evaluator_ids'] as $userId) {
-                EvaluationAssignment::create([
-                    'evaluation_form_id' => $form->id,
-                    'user_id'            => $userId,
-                    'status'             => 'pending',
-                ]);
-            }
-
-            return $form->load([
-                'sections.questions',
-                'sections.likertOptions',
-                'assignments.user',
-            ]);
+            return $form->load(['creator', 'assignments']);
         });
 
         return $this->created($form, 'Evaluation form created successfully');
