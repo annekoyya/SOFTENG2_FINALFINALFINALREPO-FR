@@ -14,7 +14,6 @@ import { EmployeeForm } from "@/components/employees/EmployeeForm";
 import { EmployeeDetails } from "@/components/employees/EmployeeDetails";
 import { NewHireTab } from "@/components/employees/NewHireTab";
 import { RotateCcw, Trash2, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import type { Employee } from "@/types/employee";
 
 export default function Employees() {
@@ -23,10 +22,16 @@ export default function Employees() {
   const isAdmin           = user?.role === "Admin";
 
   const {
-    employees, archivedEmployees, isLoading,
-    fetchEmployees, fetchArchived,
-    createEmployee, updateEmployee,
-    archiveEmployee, restoreEmployee, purgeEmployee,
+    employees,
+    archivedEmployees,
+    isLoading,
+    fetchEmployees,
+    fetchArchived,        // ← Now this exists in the hook
+    createEmployee,
+    updateEmployee,
+    archiveEmployee,
+    restoreEmployee,
+    purgeEmployee,
   } = useEmployees();
 
   const [tab, setTab]                           = useState("directory");
@@ -38,7 +43,7 @@ export default function Employees() {
   const [filters, setFilters]                   = useState({ search: "", status: "" });
 
   useEffect(() => { fetchEmployees(); }, []);
-  useEffect(() => { if (tab === "archived") fetchArchived(); }, [tab]);
+  useEffect(() => { if (tab === "archived") fetchArchived(); }, [tab, fetchArchived]);
 
   const applyFilters = useCallback((overrides: Partial<typeof filters> = {}) => {
     const merged = { ...filters, ...overrides };
@@ -169,7 +174,8 @@ export default function Employees() {
                             <Button variant="outline" size="sm" className="gap-1 text-green-700 border-green-200 hover:bg-green-50"
                               onClick={() => restoreEmployee(emp.id).then(() => {
                                 toast({ title: "Employee restored" });
-                                fetchArchived(); fetchEmployees(filters);
+                                fetchArchived();
+                                fetchEmployees(filters);
                               })}>
                               <RotateCcw className="h-3.5 w-3.5" /> Restore
                             </Button>
@@ -195,7 +201,7 @@ export default function Employees() {
         open={!!viewEmp}
         onClose={() => setViewEmp(null)}
         onEdit={handleEdit}
-        onArchive={setArchiveTarget}
+        onArchive={() => viewEmp && setArchiveTarget(viewEmp)}
         isAdmin={isAdmin}
       />
 
@@ -209,7 +215,6 @@ export default function Employees() {
             employee={editEmp}
             onSubmit={handleFormSubmit}
             onCancel={() => { setFormOpen(false); setEditEmp(null); }}
-            isAdmin={isAdmin}
           />
         </DialogContent>
       </Dialog>

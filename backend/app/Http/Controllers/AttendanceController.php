@@ -1,6 +1,5 @@
 <?php
 // backend/app/Http/Controllers/AttendanceController.php
-// REPLACE ENTIRE FILE
 
 namespace App\Http\Controllers;
 
@@ -138,7 +137,6 @@ class AttendanceController extends Controller
     }
 
     // ─── POST /api/attendance/import ─────────────────────────────────────────
-    // Receives array of rows parsed client-side from Excel (SheetJS)
     public function import(Request $request): JsonResponse
     {
         $request->validate([
@@ -165,7 +163,6 @@ class AttendanceController extends Controller
                     $timeIn   = !empty($row['time_in'])  ? $row['time_in']  : null;
                     $timeOut  = !empty($row['time_out']) ? $row['time_out'] : null;
 
-                    // Auto-calculate status if not provided
                     $status   = !empty($row['status']) ? $row['status'] : $this->calculateStatus($timeIn, $shift);
                     $minLate  = $this->calculateMinutesLate($timeIn, $shift);
                     $hoursW   = $this->calculateHoursWorked($timeIn, $timeOut);
@@ -279,7 +276,7 @@ class AttendanceController extends Controller
     {
         if (!$timeIn) return 0;
         $shiftStart = self::SHIFTS[$shift]['start'] ?? '07:00';
-        $grace      = 30; // 30-minute grace period
+        $grace      = 30;
 
         $clockIn = Carbon::createFromTimeString($timeIn);
         $start   = Carbon::createFromTimeString($shiftStart);
@@ -297,7 +294,6 @@ class AttendanceController extends Controller
         $in  = Carbon::createFromTimeString($timeIn);
         $out = Carbon::createFromTimeString($timeOut);
 
-        // Handle overnight shifts
         if ($out->lt($in)) $out->addDay();
 
         return round($in->diffInMinutes($out) / 60, 2);

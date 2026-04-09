@@ -14,12 +14,14 @@ use App\Http\Controllers\RecruitmentController;
 use App\Http\Controllers\PayslipController;
 use App\Http\Controllers\LeaveController;
 use App\Http\Controllers\LeaveBalanceController;
+use Illuminate\Http\Request; 
 
 /*
 |--------------------------------------------------------------------------
 | API Routes
 |--------------------------------------------------------------------------
 */
+Route::put('/new-hires/{id}/complete-details', [RecruitmentController::class, 'completeNewHireDetails']);
 
 // ─── Auth (Public) ────────────────────────────────────────────────────────────
 Route::prefix('auth')->group(function () {
@@ -29,6 +31,23 @@ Route::prefix('auth')->group(function () {
 
 // ─── Protected Routes ─────────────────────────────────────────────────────────
 Route::middleware('auth:sanctum')->group(function () {
+
+Route::post('/new-hires/{id}/transfer', [RecruitmentController::class, 'transferToEmployee']);
+    // Add this route
+Route::get('/users', function (Request $request) {
+    $query = App\Models\User::query();
+    
+    if ($request->filled('role')) {
+        $query->where('role', $request->role);
+    }
+    
+    $users = $query->get(['id', 'name', 'email', 'role']);
+    
+    return response()->json([
+        'success' => true,
+        'data' => $users
+    ]);
+});
     
     // Auth
     Route::prefix('auth')->group(function () {

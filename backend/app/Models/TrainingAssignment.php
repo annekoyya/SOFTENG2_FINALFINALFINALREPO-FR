@@ -7,8 +7,15 @@ use Illuminate\Database\Eloquent\Model;
 
 class TrainingAssignment extends Model
 {
+    protected $table = 'training_assignments';
+    
     protected $fillable = [
-        'training_id', 'applicant_id', 'trainer_id', 'status', 'completed_at'
+        'training_id',
+        'applicant_id',  
+        'employee_id',
+        'trainer_id',
+        'status',
+        'completed_at'
     ];
 
     protected $casts = [
@@ -20,9 +27,9 @@ class TrainingAssignment extends Model
         return $this->belongsTo(Training::class);
     }
 
-    public function applicant()
+    public function employee()
     {
-        return $this->belongsTo(Applicant::class);
+        return $this->belongsTo(Employee::class, 'employee_id');
     }
 
     public function trainer()

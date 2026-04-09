@@ -1,20 +1,9 @@
 // src/hooks/useEmployees.ts
 import { useState, useCallback } from "react";
 import { authFetch } from "./api";
-import { Employee, EmployeeFormData } from "@/types/employee";
+import type { Employee, EmployeeFormData } from "@/types/employee";
 
-export type { Employee };
-
-export interface EmployeeFilters {
-  search?: string;
-  department?: string;
-  employment_type?: string;
-  status?: string;
-  page?: number;
-  per_page?: number;
-}
-
-export interface PaginatedResponse<T> {
+interface PaginatedResponse<T> {
   data: T[];
   current_page: number;
   last_page: number;
@@ -22,195 +11,203 @@ export interface PaginatedResponse<T> {
   total: number;
 }
 
-export interface UseEmployeesReturn {
-  employees: Employee[];
-  archivedEmployees: Employee[];
-  selectedEmployee: Employee | null;
-  pagination: Omit<PaginatedResponse<Employee>, "data"> | null;
-  isLoading: boolean;
-  error: string | null;
-  fetchEmployees: (filters?: EmployeeFilters) => Promise<void>;
-  fetchArchivedEmployees: (search?: string) => Promise<void>;
-  fetchEmployee: (id: number) => Promise<void>;
-  // Aliased names to match existing page code
-  addEmployee: (data: EmployeeFormData) => Promise<Employee>;
-  createEmployee: (data: EmployeeFormData) => Promise<Employee>;
-  updateEmployee: (id: number, data: EmployeeFormData) => Promise<Employee>;
-  updateStatus: (id: number, status: Employee["status"], endDate?: string) => Promise<void>;
-  deleteEmployee: (id: number) => Promise<void>;   // alias → archiveEmployee
-  archiveEmployee: (id: number) => Promise<void>;
-  purgeEmployee: (id: number) => Promise<void>;    // hard delete (admin only)
-  restoreEmployee: (id: number) => Promise<void>;
-  clearSelectedEmployee: () => void;
-  clearError: () => void;
+interface Filters {
+  search?: string;
+  status?: string;
+  department?: string;
 }
 
-export function useEmployees(): UseEmployeesReturn {
-  const [employees, setEmployees]                 = useState<Employee[]>([]);
-  const [archivedEmployees, setArchivedEmployees] = useState<Employee[]>([]);
-  const [selectedEmployee, setSelectedEmployee]   = useState<Employee | null>(null);
-  const [pagination, setPagination]               = useState<Omit<PaginatedResponse<Employee>, "data"> | null>(null);
-  const [isLoading, setIsLoading]                 = useState(false);
-  const [error, setError]                         = useState<string | null>(null);
+export function useEmployees() {
+  const [employees, setEmployees]           = useState<Employee[]>([]);
+  const [archivedEmployees, setArchived]    = useState<Employee[]>([]);
+  const [selectedEmployee, setSelected]     = useState<Employee | null>(null);
+  const [departments, setDepartments]       = useState<string[]>([]);
+  const [jobCategories, setJobCategories]   = useState<string[]>([]);
+  const [salaryMap, setSalaryMap]           = useState<Record<string, number>>({});
+  const [pagination, setPagination]         = useState({ current_page: 1, last_page: 1, total: 0 });
+  const [isLoading, setIsLoading]           = useState(false);
+  const [error, setError]                   = useState<string | null>(null);
 
-  const handleError = (err: unknown) => {
-    const message = err instanceof Error ? err.message : "An error occurred";
-    setError(message);
-    console.error("Employee error:", err);
-  };
+  const handleError = (err: unknown) =>
+    setError(err instanceof Error ? err.message : "An error occurred");
 
-  // ─── Fetch ─────────────────────────────────────────────────────────────────
-
-  const fetchEmployees = useCallback(async (filters?: EmployeeFilters) => {
+  // ─── Fetch employees ───────────────────────────────────────────────────────
+  const fetchEmployees = useCallback(async (filters: Filters = {}, page = 1) => {
     setIsLoading(true); setError(null);
     try {
       const params = new URLSearchParams();
-      if (filters?.search)          params.append("search", filters.search);
-      if (filters?.department)      params.append("department", filters.department);
-      if (filters?.employment_type) params.append("employment_type", filters.employment_type);
-      if (filters?.status)          params.append("status", filters.status);
-      if (filters?.page)            params.append("page", String(filters.page));
-      if (filters?.per_page)        params.append("per_page", String(filters.per_page));
+      if (filters.search)     params.set("search", filters.search);
+      if (filters.status)     params.set("status", filters.status);
+      if (filters.department) params.set("department", filters.department);
+      params.set("page", String(page));
 
-      const res  = await authFetch(`/api/employees?${params.toString()}`);
+      const res  = await authFetch(`/api/employees?${params}`);
       const body = await res.json();
       if (!res.ok) throw new Error(body.message ?? "Failed to fetch employees");
 
-      const payload: PaginatedResponse<Employee> = body.data;
-      setEmployees(payload.data);
-      setPagination({ current_page: payload.current_page, last_page: payload.last_page, per_page: payload.per_page, total: payload.total });
+      const paged = body.data as PaginatedResponse<Employee>;
+      setEmployees(Array.isArray(paged.data) ? paged.data : []);
+      setPagination({ current_page: paged.current_page, last_page: paged.last_page, total: paged.total });
     } catch (err) { handleError(err); }
     finally { setIsLoading(false); }
   }, []);
 
-  const fetchArchivedEmployees = useCallback(async (search?: string) => {
+  // ─── Fetch archived employees ──────────────────────────────────────────────
+  const fetchArchivedEmployees = useCallback(async () => {
     setIsLoading(true); setError(null);
     try {
-      const params = new URLSearchParams();
-      if (search) params.append("search", search);
-      const res  = await authFetch(`/api/employees/archived?${params.toString()}`);
+      const res  = await authFetch("/api/employees/archived");
       const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed to fetch archived employees");
-      setArchivedEmployees(body.data?.data ?? body.data ?? []);
+      if (!res.ok) throw new Error(body.message ?? "Failed");
+      const paged = body.data as PaginatedResponse<Employee>;
+      setArchived(Array.isArray(paged.data) ? paged.data : []);
     } catch (err) { handleError(err); }
     finally { setIsLoading(false); }
   }, []);
 
+  // Alias for backward compatibility with existing code
+  const fetchArchived = fetchArchivedEmployees;
+
+  // ─── Fetch single ──────────────────────────────────────────────────────────
   const fetchEmployee = useCallback(async (id: number) => {
     setIsLoading(true); setError(null);
     try {
       const res  = await authFetch(`/api/employees/${id}`);
       const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed to fetch employee");
-      setSelectedEmployee(body.data);
-    } catch (err) { handleError(err); }
+      if (!res.ok) throw new Error(body.message ?? "Failed");
+      setSelected(body.data);
+      return body.data as Employee;
+    } catch (err) { handleError(err); return null; }
     finally { setIsLoading(false); }
   }, []);
 
   // ─── Create ────────────────────────────────────────────────────────────────
-
-  const createEmployee = useCallback(async (data: EmployeeFormData): Promise<Employee> => {
+  const createEmployee = useCallback(async (data: EmployeeFormData) => {
     setIsLoading(true); setError(null);
     try {
       const res  = await authFetch("/api/employees", { method: "POST", body: JSON.stringify(data) });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed to create employee");
-      setEmployees((prev) => [body.data, ...prev]);
+      if (!res.ok) throw new Error(body.message ?? "Failed to create");
+      setEmployees(prev => [body.data, ...prev]);
       return body.data as Employee;
     } catch (err) { handleError(err); throw err; }
     finally { setIsLoading(false); }
   }, []);
 
-  // Alias for pages that use addEmployee
-  const addEmployee = createEmployee;
-
   // ─── Update ────────────────────────────────────────────────────────────────
-
-  const updateEmployee = useCallback(async (id: number, data: EmployeeFormData): Promise<Employee> => {
+  const updateEmployee = useCallback(async (id: number, data: Partial<EmployeeFormData>) => {
     setIsLoading(true); setError(null);
     try {
       const res  = await authFetch(`/api/employees/${id}`, { method: "PUT", body: JSON.stringify(data) });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed to update employee");
-      setEmployees((prev) => prev.map((e) => (e.id === id ? body.data : e)));
-      if (selectedEmployee?.id === id) setSelectedEmployee(body.data);
+      if (!res.ok) throw new Error(body.message ?? "Failed to update");
+      setEmployees(prev => prev.map(e => e.id === id ? body.data : e));
+      if (selectedEmployee?.id === id) setSelected(body.data);
       return body.data as Employee;
     } catch (err) { handleError(err); throw err; }
     finally { setIsLoading(false); }
   }, [selectedEmployee]);
 
-  const updateStatus = useCallback(async (id: number, status: Employee["status"], endDate?: string) => {
-    setIsLoading(true); setError(null);
-    try {
-      const res  = await authFetch(`/api/employees/${id}/status`, { method: "PATCH", body: JSON.stringify({ status, end_date: endDate }) });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed to update status");
-      setEmployees((prev) => prev.map((e) => (e.id === id ? body.data : e)));
-    } catch (err) { handleError(err); throw err; }
-    finally { setIsLoading(false); }
-  }, []);
-
-  // ─── Archive / Restore / Purge ─────────────────────────────────────────────
-
+  // ─── Archive (soft delete) ─────────────────────────────────────────────────
   const archiveEmployee = useCallback(async (id: number) => {
     setIsLoading(true); setError(null);
     try {
       const res  = await authFetch(`/api/employees/${id}`, { method: "DELETE" });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed to archive employee");
-      setEmployees((prev) => prev.filter((e) => e.id !== id));
+      if (!res.ok) throw new Error(body.message ?? "Failed to archive");
+      setEmployees(prev => prev.filter(e => e.id !== id));
     } catch (err) { handleError(err); throw err; }
     finally { setIsLoading(false); }
   }, []);
 
-  // Alias for pages that use deleteEmployee
-  const deleteEmployee = archiveEmployee;
-
-  const purgeEmployee = useCallback(async (id: number) => {
-    // Hard delete — permanently removes from DB (admin only)
-    setIsLoading(true); setError(null);
-    try {
-      const res  = await authFetch(`/api/employees/${id}/purge`, { method: "DELETE" });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed to permanently delete employee");
-      setArchivedEmployees((prev) => prev.filter((e) => e.id !== id));
-    } catch (err) { handleError(err); throw err; }
-    finally { setIsLoading(false); }
-  }, []);
-
+  // ─── Restore ───────────────────────────────────────────────────────────────
   const restoreEmployee = useCallback(async (id: number) => {
     setIsLoading(true); setError(null);
     try {
       const res  = await authFetch(`/api/employees/${id}/restore`, { method: "POST" });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed to restore employee");
-      setArchivedEmployees((prev) => prev.filter((e) => e.id !== id));
+      if (!res.ok) throw new Error(body.message ?? "Failed to restore");
+      setArchived(prev => prev.filter(e => e.id !== id));
+      setEmployees(prev => [body.data, ...prev]);
     } catch (err) { handleError(err); throw err; }
     finally { setIsLoading(false); }
   }, []);
 
-  const clearSelectedEmployee = useCallback(() => setSelectedEmployee(null), []);
-  const clearError             = useCallback(() => setError(null), []);
+  // ─── Purge ─────────────────────────────────────────────────────────────────
+  const purgeEmployee = useCallback(async (id: number) => {
+    setIsLoading(true); setError(null);
+    try {
+      const res  = await authFetch(`/api/employees/${id}/purge`, { method: "DELETE" });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? "Failed to purge");
+      setArchived(prev => prev.filter(e => e.id !== id));
+    } catch (err) { handleError(err); throw err; }
+    finally { setIsLoading(false); }
+  }, []);
+
+  // ─── Update role ───────────────────────────────────────────────────────────
+  const updateRole = useCallback(async (id: number, role: Employee["role"]) => {
+    setIsLoading(true); setError(null);
+    try {
+      const res  = await authFetch(`/api/employees/${id}/role`, { method: "PATCH", body: JSON.stringify({ role }) });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? "Failed");
+      setEmployees(prev => prev.map(e => e.id === id ? body.data : e));
+    } catch (err) { handleError(err); throw err; }
+    finally { setIsLoading(false); }
+  }, []);
+
+  // ─── Dropdowns ────────────────────────────────────────────────────────────
+  const fetchDepartments = useCallback(async () => {
+    try {
+      const res  = await authFetch("/api/employees/departments");
+      const body = await res.json();
+      setDepartments(Array.isArray(body.data) ? body.data : []);
+    } catch { /* non-critical */ }
+  }, []);
+
+  const fetchJobCategories = useCallback(async (department?: string) => {
+    try {
+      const url = department
+        ? `/api/employees/job-categories?department=${encodeURIComponent(department)}`
+        : "/api/employees/job-categories";
+      const res  = await authFetch(url);
+      const body = await res.json();
+      setJobCategories(Array.isArray(body.data) ? body.data : []);
+    } catch { /* non-critical */ }
+  }, []);
+
+  const fetchSalaryMap = useCallback(async () => {
+    try {
+      const res  = await authFetch("/api/employees/salary-mapping");
+      const body = await res.json();
+      setSalaryMap(body.data ?? {});
+    } catch { /* non-critical */ }
+  }, []);
 
   return {
     employees,
     archivedEmployees,
     selectedEmployee,
+    departments,
+    jobCategories,
+    salaryMap,
     pagination,
     isLoading,
     error,
     fetchEmployees,
-    fetchArchivedEmployees,
+    fetchArchived,        // ← Alias for fetchArchivedEmployees
     fetchEmployee,
-    addEmployee,
     createEmployee,
     updateEmployee,
-    updateStatus,
-    deleteEmployee,
     archiveEmployee,
-    purgeEmployee,
     restoreEmployee,
-    clearSelectedEmployee,
-    clearError,
+    purgeEmployee,
+    updateRole,
+    fetchDepartments,
+    fetchJobCategories,
+    fetchSalaryMap,
+    setSelectedEmployee: setSelected,
+    clearError: () => setError(null),
   };
 }

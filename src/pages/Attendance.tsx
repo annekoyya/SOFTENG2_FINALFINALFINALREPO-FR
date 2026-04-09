@@ -414,22 +414,24 @@ function AttendanceHistory({ canManage }: { canManage: boolean }) {
 // TAB 3 — EXCEL IMPORT
 // ═══════════════════════════════════════════════════════════════════════
 
+// src/pages/Attendance.tsx
+// REPLACE ONLY THE handleImport function in AttendanceImport component
+
 function AttendanceImport() {
-  const { toast }                 = useToast();
-  const fileRef                   = useRef<HTMLInputElement>(null);
-  const [preview, setPreview]     = useState<Record<string, string>[]>([]);
+  const { toast } = useToast();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<Record<string, string>[]>([]);
   const [importing, setImporting] = useState(false);
-  const [result, setResult]       = useState<{ saved: number; errors: string[] } | null>(null);
+  const [result, setResult] = useState<{ saved: number; errors: string[] } | null>(null);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Dynamic import of SheetJS
-    const XLSX = await import("https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs" as string) as typeof import("xlsx");
-    const buf  = await file.arrayBuffer();
-    const wb   = XLSX.read(buf, { type: "buffer" });
-    const ws   = wb.Sheets[wb.SheetNames[0]];
+    const XLSX = await import("xlsx");
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: "buffer" });
+    const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: "" });
     setPreview(rows.slice(0, 5));
     setResult(null);
@@ -437,30 +439,38 @@ function AttendanceImport() {
 
   const handleImport = async () => {
     const file = fileRef.current?.files?.[0];
-    if (!file) { toast({ title: "Please select a file", variant: "destructive" }); return; }
+    if (!file) {
+      toast({ title: "Please select a file", variant: "destructive" });
+      return;
+    }
 
     setImporting(true);
     try {
-      const XLSX = await import("https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs" as string) as typeof import("xlsx");
-      const buf  = await file.arrayBuffer();
-      const wb   = XLSX.read(buf, { type: "buffer" });
-      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const XLSX = await import("xlsx");
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "buffer" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { defval: "" });
 
-      // Normalise rows to expected shape
-      const normalised = rows
+      // Convert to format backend expects (rows, not records)
+      const formattedRows = rows
         .filter(r => r.employee_id && r.date)
         .map(r => ({
           employee_id: Number(r.employee_id),
-          date:        String(r.date).trim(),
-          time_in:     String(r.time_in  || "").trim() || null,
-          time_out:    String(r.time_out || "").trim() || null,
-          shift:       String(r.shift    || "morning").trim(),
-          status:      String(r.status   || "").trim() || null,
-          notes:       String(r.notes    || "").trim() || null,
+          date: String(r.date).trim(),
+          time_in: String(r.time_in || "").trim() || null,
+          time_out: String(r.time_out || "").trim() || null,
+          shift: String(r.shift || "morning").trim(),
+          status: String(r.status || "").trim() || null,
+          notes: String(r.notes || "").trim() || null,
         }));
 
-      const res  = await authFetch("/api/attendance/import", { method: "POST", body: JSON.stringify({ rows: normalised }) });
+      // Send as 'rows' - matches backend validation
+      const res = await authFetch("/api/attendance/import", {
+        method: "POST",
+        body: JSON.stringify({ rows: formattedRows }),
+      });
+
       const body = await res.json();
       if (!res.ok) throw new Error(body.message ?? "Import failed");
 
@@ -468,8 +478,12 @@ function AttendanceImport() {
       toast({ title: `${body.data.saved} records imported` });
       setPreview([]);
       if (fileRef.current) fileRef.current.value = "";
-    } catch (e) { toast({ title: e instanceof Error ? e.message : "Import failed", variant: "destructive" }); }
-    finally { setImporting(false); }
+    } catch (e) {
+      console.error(e);
+      toast({ title: e instanceof Error ? e.message : "Import failed", variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
   };
 
   return (
@@ -477,22 +491,20 @@ function AttendanceImport() {
       <div className="rounded-xl border border-border bg-card p-5 space-y-4">
         <h3 className="font-semibold">Import Attendance from Excel</h3>
         <p className="text-sm text-muted-foreground">
-          Upload the RFID-exported Excel file using the provided template format.
-          Status is auto-calculated from time_in and shift. Existing records for the same employee+date are overwritten.
+          Upload Excel file with columns: employee_id, date (YYYY-MM-DD), time_in (HH:MM:SS), 
+          time_out (HH:MM:SS), shift, status, notes
         </p>
 
-        {/* Drop zone */}
         <div
           className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-all"
           onClick={() => fileRef.current?.click()}
         >
           <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
           <p className="text-sm font-medium">Click to select .xlsx or .csv file</p>
-          <p className="text-xs text-muted-foreground mt-1">Download the template above for the correct format</p>
+          <p className="text-xs text-muted-foreground mt-1">Excel serial dates will be converted automatically</p>
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFile} />
         </div>
 
-        {/* Preview */}
         {preview.length > 0 && (
           <div>
             <p className="text-xs font-medium text-muted-foreground mb-2">Preview (first 5 rows):</p>
@@ -519,7 +531,6 @@ function AttendanceImport() {
         </Button>
       </div>
 
-      {/* Result */}
       {result && (
         <div className={cn("rounded-xl border p-4 space-y-2", result.errors.length > 0 ? "border-amber-200 bg-amber-50" : "border-green-200 bg-green-50")}>
           <p className="font-medium text-sm flex items-center gap-2">

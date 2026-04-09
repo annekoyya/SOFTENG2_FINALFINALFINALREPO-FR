@@ -1,5 +1,5 @@
 // src/pages/Accounting.tsx
-// REPLACE ENTIRE FILE
+// COMPLETE FIXED VERSION - REPLACE ENTIRE FILE
 
 import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -16,7 +16,7 @@ import { useAccounting, type Payslip, type PayrollSummary, type AuditLog } from 
 import {
   Plus, Play, Mail, Download, CalendarDays, Eye, CheckCircle,
   DollarSign, Loader2, ShieldCheck, TrendingUp, ChevronRight,
-  FileText, RefreshCw, AlertCircle,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -103,28 +103,35 @@ function PayslipDetailSheet({
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle>Payslip — {payslip.employee?.first_name} {payslip.employee?.last_name}</SheetTitle>
-          <p className="text-sm text-muted-foreground">{payslip.period?.label} · {payslip.employee?.department}</p>
+          <div className="text-sm text-muted-foreground">{payslip.period?.label} · {payslip.employee?.department}</div>
         </SheetHeader>
 
         <div className="mt-5 space-y-5">
           {/* Status + Attendance */}
           <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: "Status", value: <Badge className={cn("text-xs border-0 capitalize", SLIP_STATUS_STYLES[payslip.status])}>{payslip.status}</Badge> },
-              { label: "Days Worked", value: `${payslip.days_worked}/${payslip.working_days_in_period}` },
-              { label: "Days Absent", value: payslip.days_absent },
-              { label: "Minutes Late", value: payslip.minutes_late > 0 ? `${payslip.minutes_late}m` : "0" },
-            ].map(({ label, value }) => (
-              <div key={label} className="bg-muted/30 rounded-lg p-3">
-                <p className="text-xs text-muted-foreground">{label}</p>
-                <p className="font-medium text-sm mt-0.5">{value}</p>
+            <div className="bg-muted/30 rounded-lg p-3">
+              <div className="text-xs text-muted-foreground">Status</div>
+              <div className="font-medium text-sm mt-0.5">
+                <Badge className={cn("text-xs border-0 capitalize", SLIP_STATUS_STYLES[payslip.status])}>{payslip.status}</Badge>
               </div>
-            ))}
+            </div>
+            <div className="bg-muted/30 rounded-lg p-3">
+              <div className="text-xs text-muted-foreground">Days Worked</div>
+              <div className="font-medium text-sm mt-0.5">{payslip.days_worked}/{payslip.working_days_in_period}</div>
+            </div>
+            <div className="bg-muted/30 rounded-lg p-3">
+              <div className="text-xs text-muted-foreground">Days Absent</div>
+              <div className="font-medium text-sm mt-0.5">{payslip.days_absent}</div>
+            </div>
+            <div className="bg-muted/30 rounded-lg p-3">
+              <div className="text-xs text-muted-foreground">Minutes Late</div>
+              <div className="font-medium text-sm mt-0.5">{payslip.minutes_late > 0 ? `${payslip.minutes_late}m` : "0"}</div>
+            </div>
           </div>
 
           {/* Earnings */}
           <div>
-            <p className="font-semibold text-sm mb-2">Earnings</p>
+            <div className="font-semibold text-sm mb-2">Earnings</div>
             <div className="space-y-1.5">
               {earnings.map(e => (
                 <div key={e.label} className="flex justify-between text-sm">
@@ -140,7 +147,7 @@ function PayslipDetailSheet({
 
           {/* Deductions */}
           <div>
-            <p className="font-semibold text-sm mb-2">Deductions</p>
+            <div className="font-semibold text-sm mb-2">Deductions</div>
             <div className="space-y-1.5">
               {deductions.map(d => (
                 <div key={d.label} className="flex justify-between text-sm">
@@ -163,7 +170,7 @@ function PayslipDetailSheet({
           {/* Employer contributions */}
           {(payslip.sss_employer + payslip.philhealth_employer + payslip.pagibig_employer) > 0 && (
             <div>
-              <p className="font-semibold text-sm mb-2">Employer Contributions</p>
+              <div className="font-semibold text-sm mb-2">Employer Contributions</div>
               {[
                 { label: "SSS Employer",      amount: payslip.sss_employer },
                 { label: "PhilHealth Employer",amount: payslip.philhealth_employer },
@@ -180,7 +187,7 @@ function PayslipDetailSheet({
           {/* Adjustment form */}
           {adjOpen && (
             <div className="border border-border rounded-lg p-4 space-y-3 bg-muted/20">
-              <p className="font-semibold text-sm">Add Adjustment</p>
+              <div className="font-semibold text-sm">Add Adjustment</div>
               <Select value={adjForm.category} onValueChange={v => setAdjForm(p => ({ ...p, category: v as "earning"|"deduction" }))}>
                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -263,8 +270,8 @@ function SummaryTab({ summary, isLoading }: { summary: PayrollSummary | null; is
           { label: "Total Net Pay",   value: fmt(summary.total_net),          color: "text-blue-700"  },
         ].map(({ label, value, color }) => (
           <div key={label} className="rounded-xl border border-border bg-card p-4">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">{label}</p>
-            <p className={cn("text-xl font-bold", color)}>{value}</p>
+            <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">{label}</div>
+            <div className={cn("text-xl font-bold", color)}>{value}</div>
           </div>
         ))}
       </div>
@@ -277,25 +284,37 @@ function SummaryTab({ summary, isLoading }: { summary: PayrollSummary | null; is
         <table className="w-full text-sm">
           <thead className="bg-muted/30">
             <tr>
-              {["Contribution","Employee Share","Employer Share","Total"].map(h => (
-                <th key={h} className={cn("px-5 py-3 font-semibold", h !== "Contribution" ? "text-right" : "text-left")}>{h}</th>
-              ))}
+              <th className="px-5 py-3 font-semibold text-left">Contribution</th>
+              <th className="px-5 py-3 font-semibold text-right">Employee Share</th>
+              <th className="px-5 py-3 font-semibold text-right">Employer Share</th>
+              <th className="px-5 py-3 font-semibold text-right">Total</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {[
-              ["SSS",        summary.total_sss_employee,        summary.total_sss_employer],
-              ["PhilHealth", summary.total_philhealth_employee, summary.total_philhealth_employer],
-              ["Pag-IBIG",   summary.total_pagibig_employee,    summary.total_pagibig_employer],
-              ["BIR / Tax",  summary.total_bir,                 0],
-            ].map(([label, emp, er]) => (
-              <tr key={label as string} className="hover:bg-muted/20">
-                <td className="px-5 py-3 font-medium">{label}</td>
-                <td className="px-5 py-3 text-right">{fmt(emp as number)}</td>
-                <td className="px-5 py-3 text-right">{er ? fmt(er as number) : "—"}</td>
-                <td className="px-5 py-3 text-right font-semibold">{fmt((emp as number) + (er as number))}</td>
-              </tr>
-            ))}
+            <tr className="hover:bg-muted/20">
+              <td className="px-5 py-3 font-medium">SSS</td>
+              <td className="px-5 py-3 text-right">{fmt(summary.total_sss_employee)}</td>
+              <td className="px-5 py-3 text-right">{fmt(summary.total_sss_employer)}</td>
+              <td className="px-5 py-3 text-right font-semibold">{fmt(summary.total_sss_employee + summary.total_sss_employer)}</td>
+            </tr>
+            <tr className="hover:bg-muted/20">
+              <td className="px-5 py-3 font-medium">PhilHealth</td>
+              <td className="px-5 py-3 text-right">{fmt(summary.total_philhealth_employee)}</td>
+              <td className="px-5 py-3 text-right">{fmt(summary.total_philhealth_employer)}</td>
+              <td className="px-5 py-3 text-right font-semibold">{fmt(summary.total_philhealth_employee + summary.total_philhealth_employer)}</td>
+            </tr>
+            <tr className="hover:bg-muted/20">
+              <td className="px-5 py-3 font-medium">Pag-IBIG</td>
+              <td className="px-5 py-3 text-right">{fmt(summary.total_pagibig_employee)}</td>
+              <td className="px-5 py-3 text-right">{fmt(summary.total_pagibig_employer)}</td>
+              <td className="px-5 py-3 text-right font-semibold">{fmt(summary.total_pagibig_employee + summary.total_pagibig_employer)}</td>
+            </tr>
+            <tr className="hover:bg-muted/20">
+              <td className="px-5 py-3 font-medium">BIR / Tax</td>
+              <td className="px-5 py-3 text-right">{fmt(summary.total_bir)}</td>
+              <td className="px-5 py-3 text-right">—</td>
+              <td className="px-5 py-3 text-right font-semibold">{fmt(summary.total_bir)}</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -308,7 +327,12 @@ function SummaryTab({ summary, isLoading }: { summary: PayrollSummary | null; is
           </div>
           <table className="w-full text-sm">
             <thead className="bg-muted/30">
-              <tr>{["Department","Employees","Gross Pay","Net Pay"].map(h => <th key={h} className={cn("px-5 py-3 font-semibold", h !== "Department" ? "text-right" : "text-left")}>{h}</th>)}</tr>
+              <tr>
+                <th className="px-5 py-3 font-semibold text-left">Department</th>
+                <th className="px-5 py-3 font-semibold text-right">Employees</th>
+                <th className="px-5 py-3 font-semibold text-right">Gross Pay</th>
+                <th className="px-5 py-3 font-semibold text-right">Net Pay</th>
+              </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {Object.entries(summary.by_department).map(([dept, d]) => (
@@ -358,7 +382,13 @@ function AuditTab({ logs, isLoading }: { logs: AuditLog[]; isLoading: boolean })
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-muted/30 border-b border-border">
-            <tr>{["Timestamp","Action","Entity","By","Description"].map(h => <th key={h} className="px-4 py-3 text-left font-semibold text-xs">{h}</th>)}</tr>
+            <tr>
+              <th className="px-4 py-3 text-left font-semibold text-xs">Timestamp</th>
+              <th className="px-4 py-3 text-left font-semibold text-xs">Action</th>
+              <th className="px-4 py-3 text-left font-semibold text-xs">Entity</th>
+              <th className="px-4 py-3 text-left font-semibold text-xs">By</th>
+              <th className="px-4 py-3 text-left font-semibold text-xs">Description</th>
+            </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {logs.map(log => (
@@ -409,10 +439,26 @@ export default function Accounting() {
   const [emailing,       setEmailing]       = useState(false);
   const [generating,     setGenerating]     = useState(false);
   const [approveAllLoading, setApproveAllLoading] = useState(false);
-  const [createOpen,     setCreateOpen]     = useState(false);
-  const [createForm,     setCreateForm]     = useState({ type: "semi_monthly", period_start: "", period_end: "", label: "" });
+  const [employees,      setEmployees]      = useState<any[]>([]);
 
   const activePeriod = periods.find(p => p.id === activePeriodId);
+
+  // Fetch employees for the empty state display
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        const { authFetch } = await import("@/hooks/api");
+        const res = await authFetch("/api/employees");
+        const data = await res.json();
+        if (data.success) {
+          setEmployees(data.data.data || []);
+        }
+      } catch (error) {
+        console.error("Failed to fetch employees");
+      }
+    };
+    fetchEmployees();
+  }, []);
 
   useEffect(() => { fetchPeriods(); }, []);
 
@@ -442,6 +488,7 @@ export default function Accounting() {
       const r = await computeAll(activePeriodId);
       toast({ title: `Payroll computed`, description: `${r.success.length} payslips generated. ${r.failed.length} failed.` });
       fetchSummary(activePeriodId);
+      fetchPayslips(activePeriodId);
     } catch (e) { toast({ title: e instanceof Error ? e.message : "Failed", variant: "destructive" }); }
     finally { setComputing(false); }
   };
@@ -477,12 +524,42 @@ export default function Accounting() {
     finally { setGenerating(false); }
   };
 
+  const downloadPdfReport = async () => {
+    if (!activePeriodId) return;
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`/api/payroll-periods/${activePeriodId}/summary-pdf`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/pdf',
+        },
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `payroll_summary_${activePeriod?.label || 'period'}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        toast({ title: "PDF download failed", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "Error downloading PDF", variant: "destructive" });
+    }
+  };
+
   const filteredPayslips = payslips.filter(p => !activePeriodId || p.payroll_period_id === activePeriodId);
 
   // Workflow steps
   const step2Done = activePeriod && ["computed","approved","paid"].includes(activePeriod.status);
   const step3Done = activePeriod && ["approved","paid"].includes(activePeriod.status);
   const step4Done = activePeriod?.status === "paid";
+
+  const employeesList = employees;
 
   return (
     <DashboardLayout>
@@ -555,8 +632,7 @@ export default function Accounting() {
             )}
 
             {activePeriodId && (
-              <Button variant="outline" size="sm" className="gap-1"
-                onClick={() => window.open(`/api/payroll-periods/${activePeriodId}/summary-pdf`, "_blank")}>
+              <Button variant="outline" size="sm" className="gap-1" onClick={downloadPdfReport}>
                 <Download className="h-4 w-4" /> PDF Report
               </Button>
             )}
@@ -566,9 +642,9 @@ export default function Accounting() {
         {/* Summary totals strip */}
         {filteredPayslips.length > 0 && (
           <div className="flex flex-wrap gap-5 px-4 py-3 bg-muted/40 rounded-xl border text-sm">
-            <div><span className="text-muted-foreground text-xs">Employees</span><p className="font-semibold">{filteredPayslips.length}</p></div>
-            <div><span className="text-muted-foreground text-xs">Total Gross</span><p className="font-semibold font-mono">{fmt(filteredPayslips.reduce((s, p) => s + p.gross_pay, 0))}</p></div>
-            <div><span className="text-muted-foreground text-xs">Total Net Pay</span><p className="font-semibold font-mono text-green-700">{fmt(filteredPayslips.reduce((s, p) => s + p.net_pay, 0))}</p></div>
+            <div><span className="text-muted-foreground text-xs">Employees</span><div className="font-semibold">{filteredPayslips.length}</div></div>
+            <div><span className="text-muted-foreground text-xs">Total Gross</span><div className="font-semibold font-mono">{fmt(filteredPayslips.reduce((s, p) => s + p.gross_pay, 0))}</div></div>
+            <div><span className="text-muted-foreground text-xs">Total Net Pay</span><div className="font-semibold font-mono text-green-700">{fmt(filteredPayslips.reduce((s, p) => s + p.net_pay, 0))}</div></div>
             <div className="ml-auto self-center">
               {activePeriod && <Badge className={cn("text-xs border-0 capitalize", PERIOD_STATUS_STYLES[activePeriod.status])}>{activePeriod.status}</Badge>}
             </div>
@@ -587,19 +663,74 @@ export default function Accounting() {
           <TabsContent value="payslips" className="mt-4">
             {isLoading && filteredPayslips.length === 0 ? (
               <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+            ) : filteredPayslips.length === 0 && activePeriod ? (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <p className="text-sm text-muted-foreground">
+                    No payslips generated yet for {activePeriod.label}. Click "Compute All" to generate.
+                  </p>
+                  <Button onClick={handleComputeAll} disabled={computing} size="sm" className="gap-1">
+                    {computing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                    Compute All
+                  </Button>
+                </div>
+                
+                {/* Show all employees that would get payslips */}
+                <div className="rounded-xl border border-border bg-card overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/30 border-b border-border">
+                      <tr>
+                        <th className="px-4 py-3 text-left font-semibold">Employee</th>
+                        <th className="px-4 py-3 text-left font-semibold">Department</th>
+                        <th className="px-4 py-3 text-right font-semibold">Monthly Salary</th>
+                        <th className="px-4 py-3 text-right font-semibold">Period Pay (est.)</th>
+                        <th className="px-4 py-3 text-center font-semibold">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {employeesList.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                            No employees found. Add employees first.
+                          </td>
+                        </tr>
+                      ) : (
+                        employeesList.map((emp: any) => (
+                          <tr key={emp.id} className="hover:bg-muted/20">
+                            <td className="px-4 py-3 font-medium">{emp.first_name} {emp.last_name}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{emp.department}</td>
+                            <td className="px-4 py-3 text-right font-mono">{fmt(emp.basic_salary)}</td>
+                            <td className="px-4 py-3 text-right font-mono text-muted-foreground">
+                              {fmt(emp.basic_salary / 2)} (est.)
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <Badge className="bg-gray-100 text-gray-600 text-xs border-0">Not Generated</Badge>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             ) : filteredPayslips.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16">
                 <FileText className="h-10 w-10 text-muted-foreground/30 mb-3" />
-                <p className="text-muted-foreground">No payslips yet. Click "Compute All" to generate.</p>
+                <p className="text-muted-foreground">Select a pay period first</p>
               </div>
             ) : (
               <div className="rounded-xl border border-border bg-card overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/30 border-b border-border">
                     <tr>
-                      {["Employee","Department","Days Worked","Gross Pay","Deductions","Net Pay","Status",""].map(h => (
-                        <th key={h} className={cn("px-4 py-3 font-semibold text-xs", ["Gross Pay","Deductions","Net Pay"].includes(h) ? "text-right" : "text-left")}>{h}</th>
-                      ))}
+                      <th className="px-4 py-3 font-semibold text-xs text-left">Employee</th>
+                      <th className="px-4 py-3 font-semibold text-xs text-left">Department</th>
+                      <th className="px-4 py-3 font-semibold text-xs text-center">Days Worked</th>
+                      <th className="px-4 py-3 font-semibold text-xs text-right">Gross Pay</th>
+                      <th className="px-4 py-3 font-semibold text-xs text-right">Deductions</th>
+                      <th className="px-4 py-3 font-semibold text-xs text-right">Net Pay</th>
+                      <th className="px-4 py-3 font-semibold text-xs text-left">Status</th>
+                      <th className="px-4 py-3 font-semibold text-xs text-center">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -641,7 +772,9 @@ export default function Accounting() {
           onMarkPaid={async (id) => { await markAsPaid(id); }}
           onSendEmail={sendEmail}
           onDownloadPdf={downloadPdf}
-          onAddAdjustment={addAdjustment}
+          onAddAdjustment={async (id, category, label, amount, note) => {
+            await addAdjustment(id, category, label, amount, note);
+          }}
         />
       </div>
     </DashboardLayout>

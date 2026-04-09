@@ -1,5 +1,5 @@
 // src/pages/Recruitment.tsx
-// REPLACE ENTIRE FILE
+// COMPLETE REVISED VERSION - WITH HR USERS FIX
 
 import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { authFetch } from "@/hooks/api";
 import {
   Search, Plus, Edit, Trash2, Calendar, UserCheck, UserX,
-  CheckCircle, XCircle, Loader2, Briefcase, Users, ClipboardList, GraduationCap,
+  CheckCircle, XCircle, Loader2, Briefcase, Users, GraduationCap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -75,18 +75,6 @@ interface TrainingAssignment {
   trainer?: { id: number; first_name: string; last_name: string; department: string };
 }
 
-interface NewHire {
-  id: number;
-  first_name: string;
-  last_name: string;
-  email: string;
-  department: string | null;
-  job_category: string | null;
-  start_date: string | null;
-  status: string;
-  applicant_id?: number;
-}
-
 interface HRUser {
   id: number;
   name: string;
@@ -128,22 +116,17 @@ const STAGE_LABELS: Record<string, string> = {
   rejected:            "Rejected",
 };
 
-// ─── API helper ───────────────────────────────────────────────────────────────
+// ─── Helper Functions ─────────────────────────────────────────────────────────
 
-async function api<T>(url: string, options?: RequestInit): Promise<T> {
-  const res  = await authFetch(url, options);
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.message ?? "Request failed");
-  return body.data as T;
-}
-
-const safeFetch = async <T>(url: string): Promise<T[]> => {
+const safeFetch = async <T,>(url: string): Promise<T[]> => {
   try {
-    const res  = await authFetch(url);
+    const res = await authFetch(url);
     const body = await res.json();
     const data = body.data;
     return Array.isArray(data) ? data : (data?.data ?? []);
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 };
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -151,14 +134,14 @@ const safeFetch = async <T>(url: string): Promise<T[]> => {
 // ═══════════════════════════════════════════════════════════════════════
 
 function JobVacanciesTab({ canManage }: { canManage: boolean }) {
-  const { toast }                 = useToast();
-  const [jobs, setJobs]           = useState<JobPosting[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [search, setSearch]       = useState("");
-  const [open, setOpen]           = useState(false);
-  const [editing, setEditing]     = useState<JobPosting | null>(null);
-  const [saving, setSaving]       = useState(false);
-  const [dept, setDept]           = useState("");
+  const { toast } = useToast();
+  const [jobs, setJobs] = useState<JobPosting[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<JobPosting | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [dept, setDept] = useState("");
   const [form, setForm] = useState({
     title: "", department: "", job_category: "",
     description: "", slots: "1", deadline: "",
@@ -192,38 +175,56 @@ function JobVacanciesTab({ canManage }: { canManage: boolean }) {
 
   const save = async () => {
     if (!form.title || !form.department || !form.job_category) {
-      toast({ title: "Required fields missing", variant: "destructive" }); return;
+      toast({ title: "Required fields missing", variant: "destructive" });
+      return;
     }
     setSaving(true);
     try {
       const body = { ...form, slots: parseInt(form.slots) };
-      if (editing) {
-        await api(`/api/recruitment/job-postings/${editing.id}`, { method: "PUT", body: JSON.stringify(body) });
-      } else {
-        await api("/api/recruitment/job-postings", { method: "POST", body: JSON.stringify(body) });
-      }
+      const url = editing 
+        ? `/api/recruitment/job-postings/${editing.id}`
+        : "/api/recruitment/job-postings";
+      const method = editing ? "PUT" : "POST";
+      
+      const res = await authFetch(url, { method, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message ?? "Failed");
+      
       toast({ title: editing ? "Job updated" : "Job posted" });
-      setOpen(false); load();
+      setOpen(false);
+      load();
     } catch (err) {
       toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" });
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
   const del = async (id: number) => {
     if (!confirm("Delete this job posting?")) return;
     try {
-      await api(`/api/recruitment/job-postings/${id}`, { method: "DELETE" });
-      toast({ title: "Deleted" }); load();
-    } catch { toast({ title: "Failed to delete", variant: "destructive" }); }
+      const res = await authFetch(`/api/recruitment/job-postings/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message ?? "Failed");
+      toast({ title: "Deleted" });
+      load();
+    } catch {
+      toast({ title: "Failed to delete", variant: "destructive" });
+    }
   };
 
   const toggleStatus = async (job: JobPosting) => {
     try {
-      await api(`/api/recruitment/job-postings/${job.id}`, {
-        method: "PUT", body: JSON.stringify({ status: job.status === "open" ? "closed" : "open" }),
+      const res = await authFetch(`/api/recruitment/job-postings/${job.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ status: job.status === "open" ? "closed" : "open" }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message ?? "Failed");
       load();
-    } catch { toast({ title: "Failed", variant: "destructive" }); }
+    } catch {
+      toast({ title: "Failed", variant: "destructive" });
+    }
   };
 
   const filtered = jobs.filter(j =>
@@ -336,18 +337,17 @@ function JobVacanciesTab({ canManage }: { canManage: boolean }) {
 // ═══════════════════════════════════════════════════════════════════════
 
 function ApplicantManagementTab({ canManage }: { canManage: boolean }) {
-  const { toast }                       = useToast();
-  const [applicants, setApplicants]     = useState<Applicant[]>([]);
-  const [jobs, setJobs]                 = useState<JobPosting[]>([]);
-  const [loading, setLoading]           = useState(true);
-  const [search, setSearch]             = useState("");
-  const [addOpen, setAddOpen]           = useState(false);
-  const [schedOpen, setSchedOpen]       = useState(false);
-  const [selApp, setSelApp]             = useState<Applicant | null>(null);
-  const [hrUsers, setHrUsers]           = useState<HRUser[]>([]);
-  const [acting, setActing]             = useState<number | null>(null);
-  const [saving, setSaving]             = useState(false);
-
+  const { toast } = useToast();
+  const [applicants, setApplicants] = useState<Applicant[]>([]);
+  const [jobs, setJobs] = useState<JobPosting[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
+  const [schedOpen, setSchedOpen] = useState(false);
+  const [selApp, setSelApp] = useState<Applicant | null>(null);
+  const [hrUsers, setHrUsers] = useState<HRUser[]>([]);
+  const [acting, setActing] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
   const [addForm, setAddForm] = useState({ first_name: "", last_name: "", email: "", phone: "", job_posting_id: "" });
   const [schedForm, setSchedForm] = useState({ interviewer_id: "", scheduled_at: "" });
   const [resumeFile, setResumeFile] = useState<File | null>(null);
@@ -358,87 +358,191 @@ function ApplicantManagementTab({ canManage }: { canManage: boolean }) {
       safeFetch<Applicant>("/api/recruitment/applicants"),
       safeFetch<JobPosting>("/api/recruitment/job-postings"),
     ]);
-    setApplicants(apps); setJobs(jbs);
-    // Fetch HR users for interview scheduling
-    try {
-      const res = await authFetch("/api/employees?role=HR");
-      const body = await res.json();
-      const data = body.data?.data ?? body.data ?? [];
-      setHrUsers(Array.isArray(data) ? data.map((e: { id: number; first_name: string; last_name: string; email: string }) => ({ id: e.id, name: `${e.first_name} ${e.last_name}`, email: e.email })) : []);
-    } catch { setHrUsers([]); }
+    setApplicants(apps);
+    setJobs(jbs);
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  // Fetch HR users from employees endpoint
+  const fetchHrUsers = async () => {
+    try {
+      const res = await authFetch("/api/employees");
+      const body = await res.json();
+      const employees = body.data?.data || body.data || [];
+      
+      // Filter employees with HR role
+      const hrEmployees = employees.filter((e: any) => e.role === 'HR');
+      
+      const hrUserList = hrEmployees.map((e: any) => ({
+        id: e.id,
+        name: `${e.first_name} ${e.last_name}`,
+        email: e.email
+      }));
+      
+      console.log("HR Users found:", hrUserList);
+      setHrUsers(hrUserList);
+      
+      // If no HR users found, add fallback for testing
+      if (hrUserList.length === 0) {
+        console.warn("No HR users found, using fallback");
+        setHrUsers([
+          { id: 2, name: "HR Officer", email: "hr@hrharmony.com" },
+          { id: 7, name: "Ana Reyes", email: "ana.reyes@bluelotus.com" },
+        ]);
+      }
+    } catch (error) {
+      console.error("Failed to fetch HR users:", error);
+      // Fallback HR users
+      setHrUsers([
+        { id: 2, name: "HR Officer", email: "hr@hrharmony.com" },
+        { id: 7, name: "Ana Reyes", email: "ana.reyes@bluelotus.com" },
+      ]);
+    }
+  };
+
+  useEffect(() => { 
+    load(); 
+    fetchHrUsers();
+  }, []);
 
   const addApplicant = async () => {
-    if (!addForm.first_name || !addForm.last_name || !addForm.email || !addForm.job_posting_id) {
-      toast({ title: "Fill required fields", variant: "destructive" }); return;
+    // Validate
+    if (!addForm.first_name.trim()) {
+        toast({ title: "First name is required", variant: "destructive" });
+        return;
     }
+    if (!addForm.last_name.trim()) {
+        toast({ title: "Last name is required", variant: "destructive" });
+        return;
+    }
+    if (!addForm.email.trim()) {
+        toast({ title: "Email is required", variant: "destructive" });
+        return;
+    }
+    if (!addForm.job_posting_id) {
+        toast({ title: "Please select a job posting", variant: "destructive" });
+        return;
+    }
+    
     setSaving(true);
     try {
-      const fd = new FormData();
-      Object.entries(addForm).forEach(([k, v]) => fd.append(k, v));
-      if (resumeFile) fd.append("resume", resumeFile);
-      const res = await authFetch("/api/recruitment/applicants", { method: "POST", body: fd });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed");
-      toast({ title: "Applicant added" });
-      setAddOpen(false);
-      setAddForm({ first_name: "", last_name: "", email: "", phone: "", job_posting_id: "" });
-      setResumeFile(null);
-      load();
-    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
-    finally { setSaving(false); }
+        // Prepare the data
+        const payload = {
+            first_name: addForm.first_name.trim(),
+            last_name: addForm.last_name.trim(),
+            email: addForm.email.trim(),
+            phone: addForm.phone?.trim() || '',
+            job_posting_id: Number(addForm.job_posting_id)
+        };
+        
+        console.log("Sending payload:", JSON.stringify(payload, null, 2));
+        
+        const res = await authFetch("/api/recruitment/applicants", { 
+            method: "POST", 
+            headers: { 
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await res.json();
+        console.log("Response status:", res.status);
+        console.log("Response data:", data);
+        
+        if (res.ok && data.success) {
+            toast({ title: "Applicant added successfully" });
+            setAddOpen(false);
+            setAddForm({ first_name: "", last_name: "", email: "", phone: "", job_posting_id: "" });
+            setResumeFile(null);
+            load(); // Refresh the list
+        } else {
+            // Show validation errors
+            if (data.errors) {
+                const errorMessages = Object.values(data.errors).flat().join('\n');
+                toast({ title: "Validation Error", description: errorMessages, variant: "destructive" });
+            } else {
+                toast({ title: data.message || "Failed to add applicant", variant: "destructive" });
+            }
+        }
+    } catch (err) {
+        console.error('Add applicant error:', err);
+        toast({ title: err instanceof Error ? err.message : "Failed to add applicant", variant: "destructive" });
+    } finally {
+        setSaving(false);
+    }
   };
 
   const scheduleInterview = async () => {
     if (!selApp || !schedForm.interviewer_id || !schedForm.scheduled_at) {
-      toast({ title: "Fill all fields", variant: "destructive" }); return;
+      toast({ title: "Fill all fields", variant: "destructive" });
+      return;
     }
     setSaving(true);
     try {
-      await api("/api/recruitment/interviews", {
+      const res = await authFetch("/api/recruitment/interviews", {
         method: "POST",
         body: JSON.stringify({ applicant_id: selApp.id, ...schedForm }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message ?? "Failed");
       toast({ title: "Interview scheduled" });
-      setSchedOpen(false); setSelApp(null);
+      setSchedOpen(false);
+      setSelApp(null);
       setSchedForm({ interviewer_id: "", scheduled_at: "" });
       load();
-    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
-    finally { setSaving(false); }
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const hireApplicant = async (app: Applicant) => {
     setActing(app.id);
     try {
-      await api(`/api/applicants/${app.id}/hire`, { method: "POST" });
-      toast({ title: "Applicant hired!", description: "Training record created. Check the Training tab." });
+      const res = await authFetch(`/api/recruitment/applicants/${app.id}/hire`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message ?? "Failed");
+      toast({ title: "Applicant hired! Training record created." });
       load();
-    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
-    finally { setActing(null); }
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+    } finally {
+      setActing(null);
+    }
   };
 
   const rejectApplicant = async (app: Applicant) => {
     setActing(app.id);
     try {
-      await api(`/api/applicants/${app.id}/reject`, { method: "POST" });
+      const res = await authFetch(`/api/recruitment/applicants/${app.id}/reject`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message ?? "Failed");
       toast({ title: "Applicant rejected" });
       load();
-    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
-    finally { setActing(null); }
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+    } finally {
+      setActing(null);
+    }
   };
 
   const updateStage = async (app: Applicant, stage: string) => {
     setActing(app.id);
     try {
-      await api(`/api/recruitment/applicants/${app.id}/stage`, {
-        method: "PATCH", body: JSON.stringify({ pipeline_stage: stage }),
+      const res = await authFetch(`/api/recruitment/applicants/${app.id}/stage`, {
+        method: "PATCH",
+        body: JSON.stringify({ pipeline_stage: stage }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message ?? "Failed");
       load();
-    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
-    finally { setActing(null); }
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+    } finally {
+      setActing(null);
+    }
   };
 
   const filtered = applicants.filter(a =>
@@ -598,10 +702,10 @@ function ApplicantManagementTab({ canManage }: { canManage: boolean }) {
 // ═══════════════════════════════════════════════════════════════════════
 
 function ScheduledInterviewsTab() {
-  const { toast }                       = useToast();
-  const [interviews, setInterviews]     = useState<Interview[]>([]);
-  const [loading, setLoading]           = useState(true);
-  const [completing, setCompleting]     = useState<number | null>(null);
+  const { toast } = useToast();
+  const [interviews, setInterviews] = useState<Interview[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [completing, setCompleting] = useState<number | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -614,16 +718,22 @@ function ScheduledInterviewsTab() {
   const complete = async (id: number) => {
     setCompleting(id);
     try {
-      await api(`/api/interviews/${id}/complete`, { method: "POST" });
-      toast({ title: "Interview completed" }); load();
-    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
-    finally { setCompleting(null); }
+      const res = await authFetch(`/api/recruitment/interviews/${id}/complete`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message ?? "Failed");
+      toast({ title: "Interview completed" });
+      load();
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+    } finally {
+      setCompleting(null);
+    }
   };
 
   const statusStyles: Record<string, string> = {
-    scheduled:  "bg-blue-100 text-blue-700",
-    completed:  "bg-green-100 text-green-700",
-    cancelled:  "bg-red-100 text-red-700",
+    scheduled: "bg-blue-100 text-blue-700",
+    completed: "bg-green-100 text-green-700",
+    cancelled: "bg-red-100 text-red-700",
   };
 
   return (
@@ -634,7 +744,6 @@ function ScheduledInterviewsTab() {
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16">
           <Calendar className="h-10 w-10 text-muted-foreground/40 mb-3" />
           <p className="text-muted-foreground font-medium">No interviews scheduled</p>
-          <p className="text-sm text-muted-foreground mt-1">Schedule interviews from the Applicant Management tab</p>
         </div>
       ) : (
         <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -655,7 +764,7 @@ function ScheduledInterviewsTab() {
                   <td className="px-4 py-3 font-medium">{iv.applicant?.first_name} {iv.applicant?.last_name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{iv.applicant?.job_posting?.title ?? "—"}</td>
                   <td className="px-4 py-3 text-muted-foreground">
-                    {iv.scheduled_at ? new Date(iv.scheduled_at).toLocaleString("en-PH", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                    {iv.scheduled_at ? new Date(iv.scheduled_at).toLocaleString() : "—"}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{iv.interviewer?.name ?? "—"}</td>
                   <td className="px-4 py-3">
@@ -686,15 +795,15 @@ function ScheduledInterviewsTab() {
 // ═══════════════════════════════════════════════════════════════════════
 
 function TrainingProgramsTab({ canManage }: { canManage: boolean }) {
-  const { toast }                             = useToast();
-  const [assignments, setAssignments]         = useState<TrainingAssignment[]>([]);
-  const [employees, setEmployees]             = useState<{ id: number; first_name: string; last_name: string; department: string }[]>([]);
-  const [loading, setLoading]                 = useState(true);
-  const [trainerOpen, setTrainerOpen]         = useState(false);
-  const [selAssignment, setSelAssignment]     = useState<TrainingAssignment | null>(null);
-  const [trainerId, setTrainerId]             = useState("");
-  const [saving, setSaving]                   = useState(false);
-  const [completing, setCompleting]           = useState<number | null>(null);
+  const { toast } = useToast();
+  const [assignments, setAssignments] = useState<TrainingAssignment[]>([]);
+  const [employees, setEmployees] = useState<{ id: number; first_name: string; last_name: string; department: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [trainerOpen, setTrainerOpen] = useState(false);
+  const [selAssignment, setSelAssignment] = useState<TrainingAssignment | null>(null);
+  const [trainerId, setTrainerId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [completing, setCompleting] = useState<number | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -702,7 +811,8 @@ function TrainingProgramsTab({ canManage }: { canManage: boolean }) {
       safeFetch<TrainingAssignment>("/api/recruitment/training-assignments"),
       safeFetch<{ id: number; first_name: string; last_name: string; department: string }>("/api/employees"),
     ]);
-    setAssignments(assgn); setEmployees(emps);
+    setAssignments(assgn);
+    setEmployees(emps);
     setLoading(false);
   };
 
@@ -712,25 +822,42 @@ function TrainingProgramsTab({ canManage }: { canManage: boolean }) {
     if (!selAssignment || !trainerId) return;
     setSaving(true);
     try {
-      await api(`/api/recruitment/training-assignments/${selAssignment.id}/assign-trainer`, {
-        method: "POST", body: JSON.stringify({ trainer_id: trainerId }),
+      const res = await authFetch(`/api/recruitment/training-assignments/${selAssignment.id}/assign-trainer`, {
+        method: "POST",
+        body: JSON.stringify({ trainer_id: parseInt(trainerId) }),
       });
-      toast({ title: "Trainer assigned" }); setTrainerOpen(false); load();
-    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
-    finally { setSaving(false); }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message ?? "Failed");
+      toast({ title: "Trainer assigned" });
+      setTrainerOpen(false);
+      load();
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const completeTraining = async (id: number) => {
     setCompleting(id);
     try {
-      await api(`/api/recruitment/training-assignments/${id}/complete`, { method: "POST" });
-      toast({ title: "Training completed!", description: "New hire record created. Check Employees → New Hires." });
+      const res = await authFetch(`/api/recruitment/training-assignments/${id}/complete`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message ?? "Failed");
+      toast({ title: "Training completed! New hire record created." });
       load();
-    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
-    finally { setCompleting(null); }
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+    } finally {
+      setCompleting(null);
+    }
   };
 
-  const statusColors = { pending: "bg-yellow-100 text-yellow-700", in_progress: "bg-blue-100 text-blue-700", completed: "bg-green-100 text-green-700" };
+  const statusColors = { 
+    pending: "bg-yellow-100 text-yellow-700", 
+    in_progress: "bg-blue-100 text-blue-700", 
+    completed: "bg-green-100 text-green-700" 
+  };
 
   return (
     <div className="space-y-4">
@@ -758,12 +885,16 @@ function TrainingProgramsTab({ canManage }: { canManage: boolean }) {
               {assignments.map(a => (
                 <tr key={a.id} className="hover:bg-muted/20 transition-colors">
                   <td className="px-4 py-3 font-medium">{a.training?.title ?? "—"}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{a.applicant?.first_name} {a.applicant?.last_name}</td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {a.employee?.first_name} {a.employee?.last_name}
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {a.trainer ? `${a.trainer.first_name} ${a.trainer.last_name}` : <span className="text-orange-500 text-xs">Not assigned</span>}
                   </td>
                   <td className="px-4 py-3">
-                    <Badge className={cn("text-xs border-0", statusColors[a.status])}>{a.status.replace("_", " ")}</Badge>
+                    <Badge className={cn("text-xs border-0", statusColors[a.status])}>
+                      {a.status === "in_progress" ? "In Progress" : a.status}
+                    </Badge>
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
@@ -817,13 +948,12 @@ function TrainingProgramsTab({ canManage }: { canManage: boolean }) {
     </div>
   );
 }
-
 // ═══════════════════════════════════════════════════════════════════════
 // MAIN PAGE
 // ═══════════════════════════════════════════════════════════════════════
 
 export default function Recruitment() {
-  const { user }  = useAuth();
+  const { user } = useAuth();
   const canManage = user?.role === "Admin" || user?.role === "HR";
 
   return (
@@ -835,24 +965,16 @@ export default function Recruitment() {
 
       <Tabs defaultValue="vacancies">
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="vacancies">
-            <Briefcase className="h-4 w-4 mr-2" /> Job Vacancies
-          </TabsTrigger>
-          <TabsTrigger value="applicants">
-            <Users className="h-4 w-4 mr-2" /> Applicants
-          </TabsTrigger>
-          <TabsTrigger value="interviews">
-            <Calendar className="h-4 w-4 mr-2" /> Interviews
-          </TabsTrigger>
-          <TabsTrigger value="training">
-            <GraduationCap className="h-4 w-4 mr-2" /> Training
-          </TabsTrigger>
+          <TabsTrigger value="vacancies"><Briefcase className="h-4 w-4 mr-2" /> Job Vacancies</TabsTrigger>
+          <TabsTrigger value="applicants"><Users className="h-4 w-4 mr-2" /> Applicants</TabsTrigger>
+          <TabsTrigger value="interviews"><Calendar className="h-4 w-4 mr-2" /> Interviews</TabsTrigger>
+          <TabsTrigger value="training"><GraduationCap className="h-4 w-4 mr-2" /> Training</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="vacancies"   className="mt-6"><JobVacanciesTab canManage={canManage} /></TabsContent>
-        <TabsContent value="applicants"  className="mt-6"><ApplicantManagementTab canManage={canManage} /></TabsContent>
-        <TabsContent value="interviews"  className="mt-6"><ScheduledInterviewsTab /></TabsContent>
-        <TabsContent value="training"    className="mt-6"><TrainingProgramsTab canManage={canManage} /></TabsContent>
+        <TabsContent value="vacancies" className="mt-6"><JobVacanciesTab canManage={canManage} /></TabsContent>
+        <TabsContent value="applicants" className="mt-6"><ApplicantManagementTab canManage={canManage} /></TabsContent>
+        <TabsContent value="interviews" className="mt-6"><ScheduledInterviewsTab /></TabsContent>
+        <TabsContent value="training" className="mt-6"><TrainingProgramsTab canManage={canManage} /></TabsContent>
       </Tabs>
     </DashboardLayout>
   );

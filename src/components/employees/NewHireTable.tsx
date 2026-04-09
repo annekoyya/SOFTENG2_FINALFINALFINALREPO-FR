@@ -3,11 +3,12 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Plus, Edit, Trash2, UserCheck, Loader2 } from "lucide-react";
+import { ArrowLeft, Plus, Edit, Trash2, UserCheck, Loader2, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNewHires, getCompletionPct, type NewHire } from "@/hooks/useNewHires";
 import { useAuth } from "@/hooks/useAuth";
 import { NewHireForm } from "@/components/employees/NewHireForm";
+import { NewHireDetailsModal } from "@/components/employees/NewHireDetailsModal";
 import { useToast } from "@/hooks/use-toast";
 
 interface Props {
@@ -29,6 +30,8 @@ export function NewHireTable({ onBack, onTransferred }: Props) {
   const [view, setView]               = useState<View>("list");
   const [selected, setSelected]       = useState<NewHire | null>(null);
   const [deletingId, setDeletingId]   = useState<number | null>(null);
+  const [modalOpen, setModalOpen]     = useState(false);
+  const [selectedNewHireId, setSelectedNewHireId] = useState<number | null>(null);
 
   const canManage = isAdmin() || isHR();
 
@@ -67,6 +70,16 @@ export function NewHireTable({ onBack, onTransferred }: Props) {
     } finally { setDeletingId(null); }
   };
 
+  const handleTransferClick = (hire: NewHire) => {
+    setSelectedNewHireId(hire.id);
+    setModalOpen(true);
+  };
+
+  const handleTransferSuccess = () => {
+    fetchNewHires();
+    onTransferred();
+  };
+
   if (view === "create" || view === "edit") {
     return (
       <NewHireForm
@@ -99,7 +112,7 @@ export function NewHireTable({ onBack, onTransferred }: Props) {
 
       {/* Info banner */}
       <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
-        <span className="font-medium">Auto-transfer:</span> Once all required fields are filled in, the new hire is automatically moved to the Employees table.
+        <span className="font-medium">Complete Details:</span> Click "Transfer" to fill in employee details and complete the onboarding process.
       </div>
 
       {/* Table */}
@@ -134,6 +147,8 @@ export function NewHireTable({ onBack, onTransferred }: Props) {
             <tbody className="divide-y divide-border">
               {newHires.map(hire => {
                 const pct = getCompletionPct(hire);
+                const isReady = hire.onboarding_status === "complete" || pct === 100;
+                
                 return (
                   <tr key={hire.id} className="hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-3">
@@ -175,6 +190,18 @@ export function NewHireTable({ onBack, onTransferred }: Props) {
                               title="Edit">
                               <Edit className="h-4 w-4" />
                             </Button>
+                            {/* Transfer Button - only show when ready */}
+                            {isReady && (
+                              <Button 
+                                size="sm" 
+                                className="h-8 px-3 bg-green-600 hover:bg-green-700 text-white"
+                                onClick={() => handleTransferClick(hire)}
+                                title="Transfer to Employee"
+                              >
+                                <UserPlus className="h-4 w-4 mr-1" />
+                                Transfer
+                              </Button>
+                            )}
                             <Button variant="ghost" size="sm"
                               className="h-8 w-8 p-0 text-destructive hover:text-destructive"
                               onClick={() => handleDelete(hire)}
@@ -195,6 +222,17 @@ export function NewHireTable({ onBack, onTransferred }: Props) {
           </table>
         </div>
       )}
+
+      {/* Transfer Modal */}
+      <NewHireDetailsModal
+        open={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          setSelectedNewHireId(null);
+        }}
+        newHireId={selectedNewHireId!}
+        onSuccess={handleTransferSuccess}
+      />
     </div>
   );
 }
