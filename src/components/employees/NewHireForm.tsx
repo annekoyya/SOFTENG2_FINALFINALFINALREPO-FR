@@ -1,5 +1,5 @@
 // src/components/employees/NewHireForm.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, AlertCircle, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { authFetch } from "@/hooks/api";
 import {
   type NewHire, type NewHireFormData,
   getCompletionPct, getMissingFields,
@@ -67,6 +68,24 @@ export function NewHireForm({ initialData, onSave, onCancel, isLoading }: Props)
     reporting_manager:        initialData?.reporting_manager ?? "",
   });
 
+  // Fetch departments and job categories from API
+  useEffect(() => {
+    const fetchOptions = async () => {
+      try {
+        const [deptsRes, jobsRes] = await Promise.all([
+          authFetch("/api/employees/departments"),
+          authFetch("/api/employees/job-categories"),
+        ]);
+        const deptsData = await deptsRes.json();
+        const jobsData = await jobsRes.json();
+        // Update state if needed
+      } catch (error) {
+        console.error("Failed to fetch options:", error);
+      }
+    };
+    fetchOptions();
+  }, []);
+
   const set = (field: keyof FormState, value: unknown) =>
     setForm(prev => ({ ...prev, [field]: value }));
 
@@ -105,7 +124,7 @@ export function NewHireForm({ initialData, onSave, onCancel, isLoading }: Props)
         {pct === 100 ? (
           <p className="text-xs text-green-600 flex items-center gap-1">
             <CheckCircle2 className="h-3 w-3" />
-            All required fields filled — will auto-transfer on save!
+            All required fields filled — will auto-transfer to Employees on save!
           </p>
         ) : (
           <div className="flex flex-wrap gap-1 mt-1">
@@ -182,7 +201,7 @@ export function NewHireForm({ initialData, onSave, onCancel, isLoading }: Props)
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium">Role</label>
+              <label className="text-sm font-medium">System Role</label>
               <Select value={form.role ?? "Employee"} onValueChange={v => set("role", v)}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -232,7 +251,7 @@ export function NewHireForm({ initialData, onSave, onCancel, isLoading }: Props)
       {/* Footer */}
       <div className="mt-6 flex justify-end gap-3">
         <Button variant="outline" onClick={onCancel}>Cancel</Button>
-        <Button onClick={handleSubmit} disabled={isLoading || !form.first_name || !form.last_name || !form.email}>
+        <Button onClick={handleSubmit} disabled={isLoading || !form.first_name || !form.last_name || !form.email} className="bg-blue-600 hover:bg-blue-700">
           {isLoading ? "Saving..." : pct === 100 ? "Save & Transfer to Employees" : "Save Progress"}
         </Button>
       </div>
@@ -248,7 +267,7 @@ function Field({ label, value, onChange, required, type = "text", placeholder }:
 }) {
   return (
     <div>
-      <label className="text-sm font-medium">{label}</label>
+      <label className="text-sm font-medium">{label}{required && " *"}</label>
       <Input className="mt-1" type={type} value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
@@ -262,7 +281,7 @@ function DateField({ label, value, onChange, required }: {
 }) {
   return (
     <div>
-      <label className="text-sm font-medium">{label}</label>
+      <label className="text-sm font-medium">{label}{required && " *"}</label>
       <input type="date" value={value} onChange={e => onChange(e.target.value)}
         required={required}
         className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />

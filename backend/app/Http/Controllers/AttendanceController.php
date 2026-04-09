@@ -1,401 +1,305 @@
 <?php
+// backend/app/Http/Controllers/AttendanceController.php
+// REPLACE ENTIRE FILE
 
 namespace App\Http\Controllers;
 
 use App\Models\Attendance;
 use App\Models\Employee;
-use App\Models\Holiday;
 use App\Models\LeaveRequest;
-use App\Services\AttendanceService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class AttendanceController extends Controller
 {
-    public function __construct(private AttendanceService $attendanceService) {}
+    // Shift windows: start time and grace period (30 min)
+    private const SHIFTS = [
+        'morning'   => ['start' => '07:00', 'end' => '15:00'],
+        'afternoon' => ['start' => '15:00', 'end' => '23:00'],
+        'night'     => ['start' => '23:00', 'end' => '07:00'],
+    ];
 
-    // ─── Clock In / Out ───────────────────────────────────────────────────────
+    // ─── GET /api/attendance ──────────────────────────────────────────────────
+    public function index(Request $request): JsonResponse
+    {
+        $query = Attendance::with('employee:id,first_name,last_name,department,shift_sched')
+            ->orderBy('date', 'desc');
 
-    /**
-     * Clock in an employee.
-     * POST /api/attendance/clock-in
-     */
-public function today(): JsonResponse
-{
-    $user     = Auth::user();
-    $employee = $user->employee;
-    $today    = now()->toDateString();
- 
-    if (!$employee) {
-        return response()->json(['error' => 'No employee record found.'], 404);
+        if ($request->filled('start_date')) $query->where('date', '>=', $request->start_date);
+        if ($request->filled('end_date'))   $query->where('date', '<=', $request->end_date);
+        if ($request->filled('status'))     $query->where('status', $request->status);
+        if ($request->filled('employee_id'))$query->where('employee_id', $request->employee_id);
+        if ($request->filled('department')) {
+            $query->whereHas('employee', fn($q) => $q->where('department', $request->department));
+        }
+
+        $records = $query->paginate($request->input('per_page', 30));
+        return response()->json(['success' => true, 'data' => $records]);
     }
- 
-    $record = Attendance::where('employee_id', $employee->id)
-        ->where('date', $today)
-        ->first();
- 
-    // Check leave
-    $onLeave = LeaveRequest::where('employee_id', $employee->id)
-        ->where('status', 'approved')
-        ->where('start_date', '<=', $today)
-        ->where('end_date',   '>=', $today)
-        ->exists();
- 
-    // Check holiday
-    $holiday = Holiday::findForDate($today);
- 
-    // Get shift (from employee record or default)
-    $shiftStart = $employee->shift_start ?? '08:00';
-    $shiftEnd   = $employee->shift_end   ?? '17:00';
-    $shiftName  = $employee->shift_name  ?? 'Regular shift';
- 
-    return response()->json([
-        'has_clocked_in'  => (bool) $record?->check_in,
-        'has_clocked_out' => (bool) $record?->check_out,
-        'check_in'        => $record?->check_in,
-        'check_out'       => $record?->check_out,
-        'status'          => $record?->status,
-        'shift_start'     => $shiftStart,
-        'shift_end'       => $shiftEnd,
-        'shift_name'      => $shiftName,
-        'is_on_leave'     => $onLeave,
-        'is_holiday'      => (bool) $holiday,
-        'holiday_name'    => $holiday?->name,
-    ]);
-}
- 
-// ── POST /api/attendance/clock-in ─────────────────────────────────────────────
- 
-public function clockIn(): JsonResponse
-{
-    $employee = Auth::user()->employee;
-    $today    = now()->toDateString();
-    $timeNow  = now()->format('H:i');
- 
-    if (!$employee) return response()->json(['message' => 'No employee record.'], 422);
- 
-    // Prevent double clock-in
-    $existing = Attendance::where('employee_id', $employee->id)->where('date', $today)->first();
-    if ($existing?->check_in) {
-        return response()->json(['message' => 'You have already clocked in today.'], 422);
-    }
- 
-    // Determine status (late if after shift_start + 5 min grace)
-    $shiftStart = $employee->shift_start ?? '08:00';
-    $graceCutoff = Carbon::parse($shiftStart)->addMinutes(5)->format('H:i');
-    $status = $timeNow > $graceCutoff ? 'late' : 'present';
- 
-    Attendance::updateOrCreate(
-        ['employee_id' => $employee->id, 'date' => $today],
-        ['check_in' => $timeNow, 'status' => $status]
-    );
- 
-    return response()->json(['message' => 'Clocked in.', 'time' => $timeNow, 'status' => $status]);
-}
- 
-// ── POST /api/attendance/clock-out ────────────────────────────────────────────
- 
-public function clockOut(): JsonResponse
-{
-    $employee = Auth::user()->employee;
-    $today    = now()->toDateString();
-    $timeNow  = now()->format('H:i');
- 
-    if (!$employee) return response()->json(['message' => 'No employee record.'], 422);
- 
-    $record = Attendance::where('employee_id', $employee->id)->where('date', $today)->first();
- 
-    if (!$record || !$record->check_in) {
-        return response()->json(['message' => 'You have not clocked in yet.'], 422);
-    }
-    if ($record->check_out) {
-        return response()->json(['message' => 'You have already clocked out today.'], 422);
-    }
- 
-    $record->update(['check_out' => $timeNow]);
-    return response()->json(['message' => 'Clocked out.', 'time' => $timeNow]);
-}
- 
-// ── POST /api/attendance/import ───────────────────────────────────────────────
-// Bulk import from the frontend-parsed Excel rows
- 
-public function import(Request $request): JsonResponse
-{
-    $request->validate([
-        'records'              => 'required|array|min:1',
-        'records.*.employee_id'=> 'required|integer|exists:employees,id',
-        'records.*.date'       => 'required|date',
-        'records.*.check_in'   => 'nullable|string',
-        'records.*.check_out'  => 'nullable|string',
-        'records.*.status'     => 'nullable|in:present,absent,late,on_leave,holiday',
-    ]);
- 
-    $imported = 0;
-    $skipped  = 0;
-    $errors   = [];
- 
-    DB::transaction(function () use ($request, &$imported, &$skipped, &$errors) {
-        foreach ($request->records as $row) {
-            try {
-                $updated = Attendance::updateOrCreate(
-                    ['employee_id' => $row['employee_id'], 'date' => $row['date']],
-                    [
-                        'check_in'  => $row['check_in']  ?? null,
-                        'check_out' => $row['check_out'] ?? null,
-                        'status'    => $row['status']    ?? 'present',
-                    ]
-                );
-                $updated->wasRecentlyCreated ? $imported++ : $skipped++;
-            } catch (\Exception $e) {
-                $errors[] = "Row employee #{$row['employee_id']} {$row['date']}: {$e->getMessage()}";
-                $skipped++;
+
+    // ─── GET /api/attendance/live-status ─────────────────────────────────────
+    public function liveStatus(): JsonResponse
+    {
+        $today     = now()->toDateString();
+        $employees = Employee::where('status', 'active')->get();
+        $total     = $employees->count();
+
+        $todayRecords = Attendance::where('date', $today)
+            ->get()
+            ->keyBy('employee_id');
+
+        $summary = [
+            'present'  => 0,
+            'late'     => 0,
+            'absent'   => 0,
+            'on_leave' => 0,
+        ];
+
+        $recentClockIns = [];
+
+        foreach ($employees as $emp) {
+            $record = $todayRecords[$emp->id] ?? null;
+            if ($record) {
+                $status = strtolower($record->status);
+                if (isset($summary[$status])) $summary[$status]++;
+                if ($record->time_in) {
+                    $recentClockIns[] = [
+                        'id'         => $emp->id,
+                        'name'       => $emp->full_name,
+                        'department' => $emp->department,
+                        'time'       => $record->time_in,
+                        'status'     => $status,
+                    ];
+                }
+            } else {
+                $summary['absent']++;
             }
         }
-    });
- 
-    return response()->json(compact('imported', 'skipped', 'errors'));
-}
- 
-    // ─── Manual Override (HR only) ────────────────────────────────────────────
 
-    /**
-     * Manually create or update an attendance record.
-     * POST /api/attendance/mark
-     */
-    public function markAttendance(Request $request): JsonResponse
+        // Sort recent clock-ins by time desc, take 10
+        usort($recentClockIns, fn($a, $b) => strcmp($b['time'], $a['time']));
+        $recentClockIns = array_slice($recentClockIns, 0, 10);
+
+        // Department breakdown
+        $deptBreakdown = Employee::where('status', 'active')
+            ->selectRaw('department, COUNT(*) as total')
+            ->groupBy('department')
+            ->get()
+            ->map(function ($dept) use ($today) {
+                $present = Attendance::where('date', $today)
+                    ->whereIn('status', ['present', 'late'])
+                    ->whereHas('employee', fn($q) => $q->where('department', $dept->department))
+                    ->count();
+                return ['department' => $dept->department, 'clocked_in' => $present, 'total' => (int)$dept->total];
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'total_employees' => $total,
+                'present'         => $summary['present'],
+                'late'            => $summary['late'],
+                'absent'          => $summary['absent'],
+                'on_leave'        => $summary['on_leave'],
+                'date'            => $today,
+                'recent_clockins' => $recentClockIns,
+                'dept_breakdown'  => $deptBreakdown,
+            ],
+        ]);
+    }
+
+    // ─── GET /api/attendance/monthly-stats ───────────────────────────────────
+    public function monthlyStats(Request $request): JsonResponse
+    {
+        $month     = (int) $request->input('month', now()->month);
+        $year      = (int) $request->input('year',  now()->year);
+        $employeeId = $request->input('employee_id');
+
+        $query = Attendance::whereYear('date', $year)->whereMonth('date', $month);
+        if ($employeeId) $query->where('employee_id', $employeeId);
+
+        $records = $query->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'present'       => $records->where('status', 'present')->count(),
+                'late'          => $records->where('status', 'late')->count(),
+                'absent'        => $records->where('status', 'absent')->count(),
+                'on_leave'      => $records->where('status', 'on_leave')->count(),
+                'total_days'    => $records->count(),
+                'total_hours'   => round($records->sum('hours_worked'), 2),
+                'minutes_late'  => $records->sum('minutes_late'),
+            ],
+        ]);
+    }
+
+    // ─── POST /api/attendance/import ─────────────────────────────────────────
+    // Receives array of rows parsed client-side from Excel (SheetJS)
+    public function import(Request $request): JsonResponse
+    {
+        $request->validate([
+            'rows'               => 'required|array|min:1',
+            'rows.*.employee_id' => 'required|integer',
+            'rows.*.date'        => 'required|date_format:Y-m-d',
+            'rows.*.shift'       => 'nullable|in:morning,afternoon,night',
+        ]);
+
+        $rows    = $request->rows;
+        $saved   = 0;
+        $errors  = [];
+
+        DB::transaction(function () use ($rows, &$saved, &$errors) {
+            foreach ($rows as $i => $row) {
+                try {
+                    $employee = Employee::find((int) $row['employee_id']);
+                    if (!$employee) {
+                        $errors[] = "Row {$i}: Employee ID {$row['employee_id']} not found";
+                        continue;
+                    }
+
+                    $shift    = $row['shift'] ?? $employee->shift_sched ?? 'morning';
+                    $timeIn   = !empty($row['time_in'])  ? $row['time_in']  : null;
+                    $timeOut  = !empty($row['time_out']) ? $row['time_out'] : null;
+
+                    // Auto-calculate status if not provided
+                    $status   = !empty($row['status']) ? $row['status'] : $this->calculateStatus($timeIn, $shift);
+                    $minLate  = $this->calculateMinutesLate($timeIn, $shift);
+                    $hoursW   = $this->calculateHoursWorked($timeIn, $timeOut);
+
+                    Attendance::updateOrCreate(
+                        ['employee_id' => $employee->id, 'date' => $row['date']],
+                        [
+                            'time_in'       => $timeIn,
+                            'time_out'      => $timeOut,
+                            'status'        => $status,
+                            'minutes_late'  => $minLate,
+                            'hours_worked'  => $hoursW,
+                            'notes'         => $row['notes'] ?? null,
+                            'recorded_by'   => Auth::id(),
+                        ]
+                    );
+                    $saved++;
+                } catch (\Throwable $e) {
+                    $errors[] = "Row {$i}: " . $e->getMessage();
+                }
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'data'    => ['saved' => $saved, 'errors' => $errors],
+            'message' => "{$saved} records imported." . (count($errors) ? ' ' . count($errors) . ' errors.' : ''),
+        ]);
+    }
+
+    // ─── POST /api/attendance/manual ─────────────────────────────────────────
+    public function manual(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'employee_id' => 'required|exists:employees,id',
             'date'        => 'required|date',
-            'time_in'     => 'nullable|date_format:H:i:s',
-            'time_out'    => 'nullable|date_format:H:i:s|after:time_in',
-            'status'      => 'required|in:present,late,absent,on_leave,half_day',
+            'time_in'     => 'nullable|date_format:H:i',
+            'time_out'    => 'nullable|date_format:H:i',
+            'status'      => 'nullable|in:present,late,absent,on_leave,half_day',
             'notes'       => 'nullable|string|max:500',
         ]);
 
-        $employee   = Employee::findOrFail($validated['employee_id']);
-        $attendance = Attendance::updateOrCreate(
-            ['employee_id' => $employee->id, 'date' => $validated['date']],
+        $employee = Employee::find($validated['employee_id']);
+        $shift    = $employee->shift_sched ?? 'morning';
+        $timeIn   = $validated['time_in'] ?? null;
+        $timeOut  = $validated['time_out'] ?? null;
+
+        $status  = $validated['status'] ?? $this->calculateStatus($timeIn, $shift);
+        $minLate = $this->calculateMinutesLate($timeIn, $shift);
+        $hoursW  = $this->calculateHoursWorked($timeIn, $timeOut);
+
+        $record = Attendance::updateOrCreate(
+            ['employee_id' => $validated['employee_id'], 'date' => $validated['date']],
             [
-                'time_in'     => $validated['time_in'] ?? null,
-                'time_out'    => $validated['time_out'] ?? null,
-                'status'      => $validated['status'],
-                'notes'       => $validated['notes'] ?? null,
-                'recorded_by' => Auth::id(),
+                'time_in'      => $timeIn,
+                'time_out'     => $timeOut,
+                'status'       => $status,
+                'minutes_late' => $minLate,
+                'hours_worked' => $hoursW,
+                'notes'        => $validated['notes'] ?? null,
+                'recorded_by'  => Auth::id(),
             ]
         );
 
-        return $this->success($attendance->load('employee'), 'Attendance record updated');
+        return response()->json(['success' => true, 'data' => $record, 'message' => 'Record saved']);
     }
 
-    /**
-     * Process daily attendance — marks absent for employees with no record.
-     * POST /api/attendance/process-daily
-     */
-    public function processDailyAttendance(Request $request): JsonResponse
+    // ─── GET /api/attendance/export ───────────────────────────────────────────
+    public function export(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        // Cast to string explicitly so service receives '2026-03-13', not a Carbon object
-        $date = $request->query('date')
-            ? \Carbon\Carbon::parse($request->query('date'))->toDateString()
-            : today()->toDateString();
+        $start = $request->input('start_date', now()->startOfMonth()->toDateString());
+        $end   = $request->input('end_date',   now()->toDateString());
 
-        $result = $this->attendanceService->processDailyAttendance($date);
-
-        return $this->success($result, 'Daily attendance processed');
-    }
-
-    // ─── Leave Requests ───────────────────────────────────────────────────────
-
-    /**
-     * Submit a leave request.
-     * POST /api/leave-requests
-     */
-    public function createLeaveRequest(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'employee_id'    => 'required|exists:employees,id',
-            'start_date'     => 'required|date|after_or_equal:today',
-            'end_date'       => 'required|date|after_or_equal:start_date',
-            'leave_type'     => 'required|in:vacation,sick,emergency,unpaid,maternity,paternity',
-            'number_of_days' => 'required|integer|min:1',
-            'hours_requested'=> 'required|numeric|min:0',
-            'reason'         => 'required|string|max:1000',
-            'contact_person' => 'nullable|string|max:100',
-            'contact_phone'  => 'nullable|string|max:20',
-        ]);
-
-        $leaveRequest = LeaveRequest::create(array_merge($validated, ['status' => 'pending']));
-
-        return $this->created($leaveRequest->load('employee'), 'Leave request submitted successfully');
-    }
-
-    /**
-     * Get leave requests with optional filters.
-     * GET /api/leave-requests
-     */
-    public function getLeaveRequests(Request $request): JsonResponse
-    {
-        $query = LeaveRequest::with(['employee', 'approver']);
-
-        if ($request->filled('status')) {
-            $query->where('status', $request->query('status'));
-        }
-
-        if ($request->filled('employee_id')) {
-            $query->where('employee_id', $request->query('employee_id'));
-        }
-
-        if ($request->filled('leave_type')) {
-            $query->where('leave_type', $request->query('leave_type'));
-        }
-
-        $leaveRequests = $query->orderBy('created_at', 'desc')->paginate(20);
-
-        return $this->success($leaveRequests);
-    }
-
-    /**
-     * Approve a leave request.
-     * POST /api/leave-requests/{leaveRequest}/approve
-     */
-    public function approveLeaveRequest(Request $request, LeaveRequest $leaveRequest): JsonResponse
-    {
-        if (!$leaveRequest->canApprove()) {
-            return $this->error('This leave request cannot be approved');
-        }
-
-        $leaveRequest->approve(Auth::id(), $request->input('reason', ''));
-
-        return $this->success($leaveRequest->load('approver'), 'Leave request approved');
-    }
-
-    /**
-     * Reject a leave request.
-     * POST /api/leave-requests/{leaveRequest}/reject
-     */
-    public function rejectLeaveRequest(Request $request, LeaveRequest $leaveRequest): JsonResponse
-    {
-        $validated = $request->validate(['reason' => 'required|string|max:500']);
-
-        if (!$leaveRequest->canReject()) {
-            return $this->error('This leave request cannot be rejected');
-        }
-
-        $leaveRequest->reject(Auth::id(), $validated['reason']);
-
-        return $this->success($leaveRequest->load('approver'), 'Leave request rejected');
-    }
-
-    /**
-     * Get attendance records for a date range.
-     * GET /api/attendance
-     */
-    public function getAttendance(Request $request): JsonResponse
-    {
-        $startDate = $request->query('start_date');
-        $endDate = $request->query('end_date');
-        $employeeId = $request->query('employee_id');
-
-        $query = Attendance::with('employee');
-
-        if ($startDate) {
-            $query->where('date', '>=', $startDate);
-        }
-        if ($endDate) {
-            $query->where('date', '<=', $endDate);
-        }
-        if ($employeeId) {
-            $query->where('employee_id', $employeeId);
-        }
-
-        $records = $query->orderBy('date', 'desc')->paginate(50);
-        return $this->success($records);
-    }
-
-    /**
-     * Get monthly attendance statistics for an employee.
-     * GET /api/attendance/monthly-stats
-     */
-    public function getMonthlyStats(Request $request): JsonResponse
-    {
-        $month = $request->query('month', now()->month);
-        $year = $request->query('year', now()->year);
-        $employeeId = Auth::user()->employee?->id;
-
-        if (!$employeeId) {
-            return $this->error('No employee record found', 404);
-        }
-
-        $startDate = Carbon::createFromDate($year, $month, 1)->toDateString();
-        $endDate = Carbon::createFromDate($year, $month, 1)->addMonth()->subDay()->toDateString();
-
-        $records = Attendance::where('employee_id', $employeeId)
-            ->whereBetween('date', [$startDate, $endDate])
+        $records = Attendance::with('employee:id,first_name,last_name,department,shift_sched')
+            ->whereBetween('date', [$start, $end])
+            ->orderBy('date')
             ->get();
 
-        $stats = [
-            'present' => $records->where('status', 'present')->count(),
-            'late' => $records->where('status', 'late')->count(),
-            'absent' => $records->where('status', 'absent')->count(),
-            'on_leave' => $records->where('status', 'on_leave')->count(),
-            'total_days' => count($records),
-        ];
+        $filename = "attendance_{$start}_{$end}.csv";
 
-        return $this->success($stats);
+        return response()->streamDownload(function () use ($records) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['Employee ID', 'Name', 'Department', 'Date', 'Time In', 'Time Out', 'Hours Worked', 'Minutes Late', 'Status', 'Notes']);
+            foreach ($records as $r) {
+                fputcsv($out, [
+                    $r->employee_id,
+                    $r->employee ? $r->employee->full_name : '',
+                    $r->employee?->department,
+                    $r->date,
+                    $r->time_in,
+                    $r->time_out,
+                    $r->hours_worked,
+                    $r->minutes_late,
+                    $r->status,
+                    $r->notes,
+                ]);
+            }
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv']);
     }
 
-    /**
-     * Get live attendance status for all employees.
-     * GET /api/attendance/live-status
-     */
-    public function getLiveStatus(Request $request): JsonResponse
+    // ─── Calculation helpers ──────────────────────────────────────────────────
+
+    private function calculateStatus(?string $timeIn, string $shift): string
     {
-        $today = now()->toDateString();
-        
-        $attendances = Attendance::where('date', $today)
-            ->with('employee')
-            ->get()
-            ->groupBy(function ($record) {
-                return $record->status;
-            });
-
-        return $this->success([
-            'date' => $today,
-            'present' => $attendances->get('present')?->count() ?? 0,
-            'absent' => $attendances->get('absent')?->count() ?? 0,
-            'late' => $attendances->get('late')?->count() ?? 0,
-            'on_leave' => $attendances->get('on_leave')?->count() ?? 0,
-            'details' => $attendances,
-        ]);
+        if (!$timeIn) return 'absent';
+        return $this->calculateMinutesLate($timeIn, $shift) > 0 ? 'late' : 'present';
     }
 
-    /**
-     * Get attendance summary for a period.
-     * GET /api/attendance/summary
-     */
-    public function getSummary(Request $request): JsonResponse
+    private function calculateMinutesLate(?string $timeIn, string $shift): int
     {
-        $startDate = $request->query('start_date', now()->subMonth()->toDateString());
-        $endDate = $request->query('end_date', now()->toDateString());
+        if (!$timeIn) return 0;
+        $shiftStart = self::SHIFTS[$shift]['start'] ?? '07:00';
+        $grace      = 30; // 30-minute grace period
 
-        $records = Attendance::whereBetween('date', [$startDate, $endDate])
-            ->get();
+        $clockIn = Carbon::createFromTimeString($timeIn);
+        $start   = Carbon::createFromTimeString($shiftStart);
+        $cutoff  = $start->copy()->addMinutes($grace);
 
-        $summary = [
-            'total_records' => count($records),
-            'present' => $records->where('status', 'present')->count(),
-            'absent' => $records->where('status', 'absent')->count(),
-            'late' => $records->where('status', 'late')->count(),
-            'on_leave' => $records->where('status', 'on_leave')->count(),
-            'start_date' => $startDate,
-            'end_date' => $endDate,
-        ];
-
-        return $this->success($summary);
+        if ($clockIn->gt($cutoff)) {
+            return (int) $clockIn->diffInMinutes($start);
+        }
+        return 0;
     }
 
-    
+    private function calculateHoursWorked(?string $timeIn, ?string $timeOut): float
+    {
+        if (!$timeIn || !$timeOut) return 0.0;
+        $in  = Carbon::createFromTimeString($timeIn);
+        $out = Carbon::createFromTimeString($timeOut);
+
+        // Handle overnight shifts
+        if ($out->lt($in)) $out->addDay();
+
+        return round($in->diffInMinutes($out) / 60, 2);
+    }
 }

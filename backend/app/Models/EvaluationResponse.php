@@ -1,17 +1,11 @@
 <?php
+// app/Models/EvaluationResponse.php
 
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * @property int      $id
- * @property int      $evaluation_assignment_id
- * @property int      $evaluation_question_id
- * @property int|null $likert_value
- * @property string|null $text_response
- */
 class EvaluationResponse extends Model
 {
     protected $fillable = [
@@ -19,10 +13,6 @@ class EvaluationResponse extends Model
         'evaluation_question_id',
         'likert_value',
         'text_response',
-    ];
-
-    protected $casts = [
-        'likert_value' => 'integer',
     ];
 
     public function assignment(): BelongsTo

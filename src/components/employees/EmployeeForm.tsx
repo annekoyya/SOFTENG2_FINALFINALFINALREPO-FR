@@ -1,459 +1,171 @@
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Employee, EmployeeFormData } from "@/types/employee";
+// src/components/employees/EmployeeTable.tsx
+import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Upload } from "lucide-react";
+  DropdownMenu, DropdownMenuContent,
+  DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Eye, Pencil, Archive, MoreHorizontal, Search, Loader2, Users } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { Employee } from "@/types/employee";
 
-const employeeSchema = z.object({
-  first_name: z.string().min(2, "First name must be at least 2 characters").max(50),
-  last_name: z.string().min(2, "Last name must be at least 2 characters").max(50),
-  middle_name: z.string().optional(),
-  name_extension: z.string().optional(),
-  date_of_birth: z.string().min(1, "Date of birth is required"),
-  email: z.string().email("Invalid email address"),
-  phone_number: z.string().min(10, "Phone number must be at least 10 characters"),
-  home_address: z.string().min(5, "Address must be at least 5 characters"),
-  emergency_contact_name: z.string().optional(),
-  emergency_contact_number: z.string().optional(),
-  relationship: z.string().optional(),
-  tin: z.string().optional(),
-  sss_number: z.string().optional(),
-  pagibig_number: z.string().optional(),
-  philhealth_number: z.string().optional(),
-  bank_name: z.string().optional(),
-  account_name: z.string().optional(),
-  account_number: z.string().optional(),
-  start_date: z.string().min(1, "Start date is required"),
-  department: z.string().min(1, "Department is required"),
-  job_category: z.string().min(2, "Job category is required"),
-  employment_type: z.enum(["regular", "probationary", "contractual", "part_time", "intern"]),
-  shift_sched: z.enum(["morning", "afternoon", "night"]),
-  basic_salary: z.coerce.number().min(1, "Salary must be greater than 0"),
-  role: z.enum(["Employee", "HR", "Manager", "Accountant", "Admin"]).optional(),
-  manager_id: z.number().optional(),
-});
-
-interface EmployeeFormProps {
-  employee?: Employee;
-  onSubmit: (data: EmployeeFormData) => Promise<void>;
-  onCancel: () => void;
-  isLoading?: boolean;
+interface Props {
+  employees: Employee[];
+  isLoading: boolean;
+  isAdmin: boolean;
+  onView:    (emp: Employee) => void;
+  onEdit:    (emp: Employee) => void;
+  onArchive: (emp: Employee) => void;
+  onSearch:  (value: string) => void;
+  onFilter:  (status: string) => void;
 }
 
-// Department options
-const departmentOptions = [
-  { id: "Human Resources", name: "Human Resources" },
-  { id: "Finance", name: "Finance" },
-  { id: "Front Office", name: "Front Office" },
-  { id: "Food & Beverage", name: "Food & Beverage" },
-  { id: "Housekeeping", name: "Housekeeping" },
-];
+const statusColors: Record<string, string> = {
+  active:     "bg-green-100 text-green-700",
+  on_leave:   "bg-yellow-100 text-yellow-700",
+  suspended:  "bg-orange-100 text-orange-700",
+  terminated: "bg-red-100 text-red-700",
+};
 
-// Job category options with corresponding salaries
-const jobCategoryOptions = [
-  { id: "Receptionist", name: "Receptionist", salary: 15000 },
-  { id: "Housekeeper", name: "Housekeeper", salary: 12000 },
-  { id: "Waiter", name: "Waiter", salary: 13000 },
-  { id: "Cook", name: "Cook", salary: 18000 },
-  { id: "Supervisor", name: "Supervisor", salary: 20000 },
-  { id: "Manager", name: "Manager", salary: 30000 },
-  { id: "Accountant", name: "Accountant", salary: 25000 },
-  { id: "HR Specialist", name: "HR Specialist", salary: 22000 },
-];
+const shiftColors: Record<string, string> = {
+  morning:   "bg-sky-100 text-sky-700",
+  afternoon: "bg-amber-100 text-amber-700",
+  night:     "bg-indigo-100 text-indigo-700",
+};
 
-export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: EmployeeFormProps) {
-  const form = useForm<z.infer<typeof employeeSchema>>({
-    resolver: zodResolver(employeeSchema),
-    defaultValues: {
-      first_name: employee?.first_name || "",
-      last_name: employee?.last_name || "",
-      middle_name: employee?.middle_name || "",
-      name_extension: employee?.name_extension || "",
-      date_of_birth: employee?.date_of_birth || "",
-      email: employee?.email || "",
-      phone_number: employee?.phone_number || "",
-      home_address: employee?.home_address || "",
-      emergency_contact_name: employee?.emergency_contact_name || "",
-      emergency_contact_number: employee?.emergency_contact_number || "",
-      relationship: employee?.relationship || "",
-      tin: employee?.tin || "",
-      sss_number: employee?.sss_number || "",
-      pagibig_number: employee?.pagibig_number || "",
-      philhealth_number: employee?.philhealth_number || "",
-      bank_name: employee?.bank_name || "",
-      account_name: employee?.account_name || "",
-      account_number: employee?.account_number || "",
-      start_date: employee?.start_date || "",
-      department: employee?.department || "",
-      job_category: employee?.job_category || "",
-      employment_type: employee?.employment_type || "regular",
-      shift_sched: employee?.shift_sched || "morning",
-      basic_salary: employee?.basic_salary ? parseFloat(employee.basic_salary as unknown as string) : 0,
-      role: employee?.role || "Employee",
-      manager_id: employee?.manager_id || undefined,
-    },
-  });
+export function EmployeeTable({
+  employees, isLoading, isAdmin,
+  onView, onEdit, onArchive, onSearch, onFilter,
+}: Props) {
+  const [search, setSearch] = useState("");
 
-  const handleSubmit = async (data: z.infer<typeof employeeSchema>) => {
-    await onSubmit(data as EmployeeFormData);
+  const handleSearch = (v: string) => {
+    setSearch(v);
+    onSearch(v);
   };
 
-  const firstName = form.watch("first_name");
-  const lastName = form.watch("last_name");
-
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-        <Tabs defaultValue="personal" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="personal">Personal</TabsTrigger>
-            <TabsTrigger value="employment">Employment</TabsTrigger>
-            <TabsTrigger value="contact">Contact</TabsTrigger>
-            <TabsTrigger value="documents">Documents</TabsTrigger>
-          </TabsList>
-
-          {/* Personal Information Tab */}
-          <TabsContent value="personal" className="space-y-6 pt-6">
-            {/* Profile Avatar */}
-            <div className="flex items-center gap-6">
-              <div className="relative">
-                <Avatar className="h-24 w-24 border-4 border-primary/20">
-                  <AvatarFallback className="bg-primary/10 text-primary text-2xl font-semibold">
-                    {firstName?.[0] || "?"}{lastName?.[0] || "?"}
-                  </AvatarFallback>
-                </Avatar>
-              </div>
-              <div>
-                <h4 className="font-medium text-card-foreground">Profile Photo</h4>
-                <p className="text-sm text-muted-foreground">
-                  Photo upload feature coming soon.
-                </p>
-              </div>
-            </div>
-
-            {/* Name Fields */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="first_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>First Name *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter first name" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="last_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Last Name *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter last name" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {/* Personal Details */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="date_of_birth"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Date of Birth *</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email *</FormLabel>
-                    <FormControl>
-                      <Input type="email" placeholder="email@example.com" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {/* Address */}
-            <FormField
-              control={form.control}
-              name="home_address"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Address *</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="Enter full address" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </TabsContent>
-
-          {/* Employment Tab */}
-          <TabsContent value="employment" className="space-y-6 pt-6">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="department"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Department *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select department" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {departmentOptions.map((dept) => (
-                          <SelectItem key={dept.id} value={dept.id}>
-                            {dept.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="job_category"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Job Category *</FormLabel>
-                    <Select onValueChange={(value) => {
-                      field.onChange(value);
-                      const selectedCategory = jobCategoryOptions.find(cat => cat.id === value);
-                      if (selectedCategory) {
-                        form.setValue('basic_salary', selectedCategory.salary);
-                      }
-                    }} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select job category" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {jobCategoryOptions.map((category) => (
-                          <SelectItem key={category.id} value={category.id}>
-                            {category.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="employment_type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Employment Type *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="regular">Regular</SelectItem>
-                        <SelectItem value="probationary">Probationary</SelectItem>
-                        <SelectItem value="contractual">Contractual</SelectItem>
-                        <SelectItem value="part_time">Part Time</SelectItem>
-                        <SelectItem value="intern">Intern</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="shift_sched"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Shift Schedule *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select shift" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="morning">Morning</SelectItem>
-                        <SelectItem value="afternoon">Afternoon</SelectItem>
-                        <SelectItem value="night">Night</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="start_date"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Start Date *</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="basic_salary"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Monthly Salary (₱) *</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="0" {...field} readOnly className="bg-muted" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </TabsContent>
-
-          {/* Contact Tab */}
-          <TabsContent value="contact" className="space-y-6 pt-6">
-            <FormField
-              control={form.control}
-              name="phone_number"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Phone Number *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="+63 9XX XXX XXXX" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="rounded-lg border border-border bg-muted/30 p-4">
-              <h4 className="mb-4 font-medium text-card-foreground">Emergency Contact</h4>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="emergency_contact_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Contact Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Full name" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="emergency_contact_number"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Contact Phone</FormLabel>
-                      <FormControl>
-                        <Input placeholder="+63 9XX XXX XXXX" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
-          </TabsContent>
-
-          {/* Documents Tab */}
-          <TabsContent value="documents" className="space-y-6 pt-6">
-            <div className="rounded-lg border-2 border-dashed border-border bg-muted/30 p-8 text-center">
-              <Upload className="mx-auto h-12 w-12 text-muted-foreground" />
-              <h4 className="mt-4 font-medium text-card-foreground">
-                Upload Documents
-              </h4>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Drag and drop files here, or click to browse
-              </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Supported: PDF, DOC, DOCX, JPG, PNG (Max 10MB each)
-              </p>
-              <Button type="button" variant="outline" className="mt-4">
-                Choose Files
-              </Button>
-            </div>
-
-            <div className="text-sm text-muted-foreground">
-              <p>Recommended documents:</p>
-              <ul className="mt-2 list-inside list-disc space-y-1">
-                <li>Resume/CV</li>
-                <li>Valid Government ID</li>
-                <li>Employment Contract</li>
-                <li>Certificates & Credentials</li>
-              </ul>
-            </div>
-          </TabsContent>
-        </Tabs>
-
-        {/* Form Actions */}
-        <div className="flex justify-end gap-3 border-t border-border pt-6">
-          <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={isLoading}>
-            {isLoading ? "Saving..." : employee ? "Update Employee" : "Add Employee"}
-          </Button>
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={e => handleSearch(e.target.value)}
+            placeholder="Search name, email, department..."
+            className="pl-9"
+          />
         </div>
-      </form>
-    </Form>
+        <Select onValueChange={v => onFilter(v === "all" ? "" : v)}>
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="All statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="on_leave">On Leave</SelectItem>
+            <SelectItem value="suspended">Suspended</SelectItem>
+            <SelectItem value="terminated">Terminated</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Table */}
+      {isLoading && employees.length === 0 ? (
+        <div className="flex justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : employees.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-20">
+          <Users className="h-10 w-10 text-muted-foreground/40 mb-3" />
+          <p className="font-medium text-muted-foreground">No employees found</p>
+          <p className="text-sm text-muted-foreground mt-1">Employees are added through the recruitment pipeline</p>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/30 border-b border-border">
+              <tr>
+                <th className="px-4 py-3 text-left font-semibold">Employee</th>
+                <th className="px-4 py-3 text-left font-semibold">Department</th>
+                <th className="px-4 py-3 text-left font-semibold">Job Category</th>
+                <th className="px-4 py-3 text-left font-semibold">Shift</th>
+                <th className="px-4 py-3 text-left font-semibold">Status</th>
+                <th className="px-4 py-3 text-right font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {employees.map(emp => (
+                <tr key={emp.id} className="hover:bg-muted/20 transition-colors">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      {/* Avatar */}
+                      <div className="h-9 w-9 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-semibold text-sm shrink-0">
+                        {emp.first_name[0]}{emp.last_name[0]}
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">
+                          {emp.first_name} {emp.last_name}
+                          {emp.name_extension ? ` ${emp.name_extension}` : ""}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{emp.email}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground">{emp.department}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{emp.job_category}</td>
+                  <td className="px-4 py-3">
+                    <Badge className={cn("text-xs border-0 capitalize", shiftColors[emp.shift_sched] ?? "bg-gray-100 text-gray-600")}>
+                      {emp.shift_sched}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge className={cn("text-xs border-0 capitalize", statusColors[emp.status])}>
+                      {emp.status.replace("_", " ")}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1">
+                      {/* View — always visible */}
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0"
+                        onClick={() => onView(emp)} title="View">
+                        <Eye className="h-4 w-4" />
+                      </Button>
+
+                      {/* Edit + Archive — Admin only */}
+                      {isAdmin && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => onEdit(emp)}>
+                              <Pencil className="mr-2 h-4 w-4" /> Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-red-600 focus:text-red-600"
+                              onClick={() => onArchive(emp)}
+                            >
+                              <Archive className="mr-2 h-4 w-4" /> Archive
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }

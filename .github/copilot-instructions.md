@@ -44,9 +44,11 @@ Payslip
 
 
 Performance Management
-> The evaluation forms cant be sent? fix error 
+> The evaluation forms are sent by admin/manager roles
 > The evaluation forms remove the predefined questions and such 
 > The evaluoators in each forms are chosen by the admin from the HR roles
+> It aslo should have a subtab/page to generate the analytics of each evaluation
+> it should also be able to have drafts, edit and send out in the page
 
 
 Training and Recruitment
@@ -179,4 +181,35 @@ api.ts:21
 api.ts:21 
  GET http://localhost:5174/api/job-offers 404 (Not Found)
 
+
+----
+>Login Change to Actual layout
+> Dahsboard change to more aesthetic and have sidebar
+
+ADMIN
+Employee MAnagement 
+> Cant export Employee data 
+> RBAC not implemented (for edit access)
+> Newhire > employee not yet implemented 
+
+Payroll 
+> Why are employees not in the table ish? 
+> PDF paylsip report not working 
+> Email still not implemented 
+
+Performance 
+> Lowkey tables and form is working 
+> Cant send out forms
+> can create forms but when u click it again the contents disappear? so backend problem idk?
+
+Recruitment
+>IDK THE PIPELINE WTF
+> New Job Posting doesnt work babes
+> Applicant Management (Improve UI ?), idk of the add resume works, 
+> Schedule interviewer shoule be automated, since its set job posting is set in a period of time, each job vacavy sht is in there in tabs with all of its applicants, and there is a set date for the job itself not for the applicants, HR then closes the interview for the job vavancy,, not indeividually click for applicants
+> training programs, babes there is still no content bcs i keep on debugging. but this is automated. remove the option to choose trainer. once the job vacancy is filled> applicant/s are hired > trainingmodule automatically appears, and HRs job is just to change if its done or not> ONCE ITS DONE OR FINISHED TRANSFER ALL APPLICANTS WITH HIRED STATUS SINCE THEY ARE OBVI HIRED TO NEW HIRE TABLE 
+
+
+Attendance 
+> BEG SIR NA ICHANGE TO AUDIT LOGS
 

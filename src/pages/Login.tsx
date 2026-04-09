@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Loader2, LogIn } from "lucide-react";
+import hotelBg from "@/assets/hotel.jpg";
 
 export default function Login() {
   const { login, isLoading, error, clearError } = useAuth();
@@ -13,8 +14,6 @@ export default function Login() {
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
 
-  // Use plain div inputs instead of shadcn Input to avoid
-  // browser native HTML5 email pattern validation conflicts
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -28,19 +27,25 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 px-4">
-      <div className="w-full max-w-sm space-y-6">
+    <div 
+      className="min-h-screen flex items-center justify-center px-4 bg-cover bg-center bg-no-repeat"
+      style={{ backgroundImage: `url(${hotelBg})` }}
+    >
+      {/* Overlay for better text readability */}
+      <div className="absolute inset-0 bg-black/50" />
+      
+      <div className="w-full max-w-sm space-y-6 relative z-10">
         {/* Branding */}
         <div className="text-center">
-          <h1 className="font-display text-3xl font-bold text-foreground">
+          <h1 className="font-display text-4xl font-bold text-white">
             Blue Lotus
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm text-white/80">
             HR Management System
           </p>
         </div>
 
-        <Card>
+        <Card className="bg-white/95 backdrop-blur-sm shadow-xl">
           <CardHeader className="pb-4">
             <CardTitle className="text-xl">Sign In</CardTitle>
             <CardDescription>
@@ -48,7 +53,6 @@ export default function Login() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {/* noValidate disables browser native HTML5 validation */}
             <form onSubmit={handleSubmit} noValidate className="space-y-4">
               <div className="space-y-1">
                 <label
@@ -59,8 +63,8 @@ export default function Login() {
                 </label>
                 <input
                   id="email"
-                  type="text"          // ← text not email, avoids pattern error
-                  inputMode="email"    // ← still shows email keyboard on mobile
+                  type="text"
+                  inputMode="email"
                   autoComplete="email"
                   placeholder="you@bluelotus.com"
                   value={email}
@@ -90,6 +94,16 @@ export default function Login() {
                 />
               </div>
 
+              <div className="text-right">
+                <button
+                  type="button"
+                  className="text-sm text-primary hover:underline"
+                  onClick={() => alert("Contact HR to reset password")}
+                >
+                  Forgot Password?
+                </button>
+              </div>
+
               {error && (
                 <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2">
                   <p className="text-sm text-destructive">{error}</p>
@@ -98,7 +112,7 @@ export default function Login() {
 
               <Button
                 type="submit"
-                className="w-full"
+                className="w-full bg-blue-600 hover:bg-blue-700"
                 disabled={isLoading || !email || !password}
               >
                 {isLoading ? (
@@ -106,11 +120,11 @@ export default function Login() {
                 ) : (
                   <LogIn className="mr-2 h-4 w-4" />
                 )}
-                {isLoading ? "Signing in..." : "Sign In"}
+                {isLoading ? "Signing in..." : "Log In"}
               </Button>
             </form>
 
-            {/* Test credentials — remove in production */}
+            {/* Test credentials */}
             <div className="mt-4 rounded-md bg-muted p-3 space-y-1">
               <p className="text-xs font-semibold text-muted-foreground">
                 Test Credentials

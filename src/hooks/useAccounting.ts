@@ -1,4 +1,6 @@
 // src/hooks/useAccounting.ts
+// REPLACE ENTIRE FILE — single source of truth, replaces usePayslip + usePayroll
+
 import { useState, useCallback } from "react";
 import { authFetch } from "./api";
 
@@ -11,30 +13,32 @@ export interface PayrollPeriod {
   period_end: string;
   label: string;
   status: "open" | "processing" | "computed" | "approved" | "paid";
-  approved_by: number | null;
-  approved_at: string | null;
-  processed_by: number | null;
-  processed_at: string | null;
-  notes: string | null;
+  notes?: string;
+  approved_by?: number;
+  approved_at?: string;
+  processed_by?: number;
+  processed_at?: string;
   payslips_count?: number;
   created_at: string;
-}
-
-export interface PayslipLineItem {
-  id: number;
-  payslip_id: number;
-  category: "earning" | "deduction";
-  label: string;
-  amount: number;
-  description: string | null;
-  order: number;
-  is_manual: boolean;
+  updated_at: string;
 }
 
 export interface Payslip {
   id: number;
   payroll_period_id: number;
   employee_id: number;
+  employee?: {
+    id: number;
+    first_name: string;
+    last_name: string;
+    full_name?: string;
+    department: string;
+    job_category: string;
+    basic_salary: number;
+    email?: string;
+  };
+  period?: PayrollPeriod;
+  // Attendance
   working_days_in_period: number;
   days_worked: number;
   days_absent: number;
@@ -42,6 +46,7 @@ export interface Payslip {
   days_unpaid_leave: number;
   minutes_late: number;
   overtime_hours: number;
+  // Earnings
   basic_pay: number;
   overtime_pay: number;
   transport_allowance: number;
@@ -50,6 +55,7 @@ export interface Payslip {
   bonuses: number;
   thirteenth_month_pay: number;
   gross_pay: number;
+  // Deductions
   late_deduction: number;
   absent_deduction: number;
   unpaid_leave_deduction: number;
@@ -62,29 +68,38 @@ export interface Payslip {
   company_loan_deduction: number;
   other_deductions: number;
   total_deductions: number;
+  // Employer
   sss_employer: number;
   philhealth_employer: number;
   pagibig_employer: number;
+  // Net
   net_pay: number;
+  // Workflow
   status: "draft" | "computed" | "approved" | "paid" | "cancelled";
-  adjustments_note: string | null;
+  adjustments_note?: string;
+  pdf_path?: string;
   email_sent: boolean;
-  email_sent_at: string | null;
-  computed_at: string | null;
-  approved_at: string | null;
-  employee?: {
-    id: number;
-    first_name: string;
-    last_name: string;
-    full_name: string;
-    department: string;
-    job_category: string;
-    basic_salary: string;
-    email: string;
-  };
-  period?: PayrollPeriod;
+  email_sent_at?: string;
+  computed_by?: number;
+  computed_at?: string;
+  approved_by?: number;
+  approved_at?: string;
+  created_at: string;
+  updated_at: string;
+  line_items?: PayslipLineItem[];
   earnings?: PayslipLineItem[];
   deductions?: PayslipLineItem[];
+}
+
+export interface PayslipLineItem {
+  id: number;
+  payslip_id: number;
+  category: "earning" | "deduction";
+  label: string;
+  amount: number;
+  description?: string;
+  order: number;
+  is_manual: boolean;
 }
 
 export interface PayrollSummary {
@@ -109,210 +124,165 @@ export interface AuditLog {
   entity_id: number;
   action: string;
   performed_by: number;
-  before_values: Record<string, unknown> | null;
-  after_values: Record<string, unknown> | null;
-  description: string | null;
-  ip_address: string | null;
+  performer?: { id: number; name: string; email: string };
+  before_values?: Record<string, unknown>;
+  after_values?: Record<string, unknown>;
+  description?: string;
   created_at: string;
-  performer?: { id: number; name: string };
+}
+
+export interface ComputeResult {
+  success: { employee_id: number; name: string; net_pay: number }[];
+  failed:  { employee_id?: number; name: string; error: string }[];
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useAccounting() {
-  const [periods, setPeriods]       = useState<PayrollPeriod[]>([]);
-  const [payslips, setPayslips]     = useState<Payslip[]>([]);
+  const [periods,         setPeriods]         = useState<PayrollPeriod[]>([]);
+  const [payslips,        setPayslips]        = useState<Payslip[]>([]);
   const [selectedPayslip, setSelectedPayslip] = useState<Payslip | null>(null);
-  const [summary, setSummary]       = useState<PayrollSummary | null>(null);
-  const [auditLogs, setAuditLogs]   = useState<AuditLog[]>([]);
-  const [isLoading, setIsLoading]   = useState(false);
-  const [error, setError]           = useState<string | null>(null);
+  const [summary,         setSummary]         = useState<PayrollSummary | null>(null);
+  const [auditLogs,       setAuditLogs]       = useState<AuditLog[]>([]);
+  const [isLoading,       setIsLoading]       = useState(false);
+  const [error,           setError]           = useState<string | null>(null);
 
-  const handleError = (err: unknown) => {
-    setError(err instanceof Error ? err.message : "An error occurred");
-  };
+  // ─── Generic fetch wrapper ────────────────────────────────────────────────
 
-  // ─── Periods ───────────────────────────────────────────────────────────────
+  const call = useCallback(async <T>(
+    fn: () => Promise<Response>
+  ): Promise<T> => {
+    setIsLoading(true); setError(null);
+    try {
+      const res  = await fn();
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? `HTTP ${res.status}`);
+      return (body.data ?? body) as T;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Request failed";
+      setError(msg); throw e;
+    } finally { setIsLoading(false); }
+  }, []);
+
+  // ─── Periods ──────────────────────────────────────────────────────────────
 
   const fetchPeriods = useCallback(async () => {
-    setIsLoading(true); setError(null);
-    try {
-      const res  = await authFetch("/api/payroll-periods");
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed");
-      setPeriods(body.data?.data ?? body.data ?? []);
-    } catch (err) { handleError(err); }
-    finally { setIsLoading(false); }
-  }, []);
+    const data = await call<{ data: PayrollPeriod[] }>(() => authFetch("/api/payroll-periods"));
+    const list = Array.isArray(data) ? data : ((data as { data?: PayrollPeriod[] }).data ?? []);
+    setPeriods(list);
+  }, [call]);
 
-  const generateNextPeriod = useCallback(async (type: "semi_monthly" | "monthly") => {
-    setIsLoading(true); setError(null);
-    try {
-      const res  = await authFetch("/api/payroll-periods/generate-next", {
-        method: "POST", body: JSON.stringify({ type }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed");
-      setPeriods(prev => [body.data, ...prev]);
-      return body.data as PayrollPeriod;
-    } catch (err) { handleError(err); throw err; }
-    finally { setIsLoading(false); }
-  }, []);
+  const createPeriod = useCallback(async (payload: { type: string; period_start: string; period_end: string; label: string }) => {
+    const p = await call<PayrollPeriod>(() => authFetch("/api/payroll-periods", { method: "POST", body: JSON.stringify(payload) }));
+    setPeriods(prev => [p, ...prev]);
+    return p;
+  }, [call]);
 
-  // ─── Payslips ──────────────────────────────────────────────────────────────
+  const generateNextPeriod = useCallback(async (type = "semi_monthly") => {
+    const p = await call<PayrollPeriod>(() => authFetch(`/api/payroll-periods/generate-next?type=${type}`, { method: "POST" }));
+    setPeriods(prev => [p, ...prev]);
+    return p;
+  }, [call]);
 
-  const fetchPayslips = useCallback(async (periodId: number) => {
-    setIsLoading(true); setError(null);
-    try {
-      const res  = await authFetch(`/api/payslips?payroll_period_id=${periodId}`);
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed");
-      setPayslips(body.data?.data ?? body.data ?? []);
-    } catch (err) { handleError(err); }
-    finally { setIsLoading(false); }
-  }, []);
+  // ─── Payslips ─────────────────────────────────────────────────────────────
+
+  const fetchPayslips = useCallback(async (periodId?: number) => {
+    const params = periodId ? `?payroll_period_id=${periodId}&per_page=100` : "?per_page=100";
+    const data   = await call<{ data: Payslip[] } | Payslip[]>(() => authFetch(`/api/payslips${params}`));
+    setPayslips(Array.isArray(data) ? data : ((data as { data?: Payslip[] }).data ?? []));
+  }, [call]);
 
   const fetchPayslip = useCallback(async (id: number) => {
-    setIsLoading(true); setError(null);
-    try {
-      const res  = await authFetch(`/api/payslips/${id}`);
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed");
-      setSelectedPayslip(body.data);
-    } catch (err) { handleError(err); }
-    finally { setIsLoading(false); }
-  }, []);
+    const p = await call<Payslip>(() => authFetch(`/api/payslips/${id}`));
+    setSelectedPayslip(p);
+    return p;
+  }, [call]);
 
   const computeSingle = useCallback(async (employeeId: number, periodId: number) => {
-    setIsLoading(true); setError(null);
-    try {
-      const res  = await authFetch("/api/payslips/compute", {
-        method: "POST",
-        body: JSON.stringify({ employee_id: employeeId, payroll_period_id: periodId }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed to compute");
-      const ps = body.data as Payslip;
-      setPayslips(prev => {
-        const exists = prev.find(p => p.id === ps.id);
-        return exists ? prev.map(p => p.id === ps.id ? ps : p) : [ps, ...prev];
-      });
-      return ps;
-    } catch (err) { handleError(err); throw err; }
-    finally { setIsLoading(false); }
-  }, []);
+    return call<Payslip>(() => authFetch("/api/payslips/compute", {
+      method: "POST", body: JSON.stringify({ employee_id: employeeId, payroll_period_id: periodId }),
+    }));
+  }, [call]);
 
   const computeAll = useCallback(async (periodId: number) => {
-    setIsLoading(true); setError(null);
-    try {
-      const res  = await authFetch("/api/payslips/compute-all", {
-        method: "POST",
-        body: JSON.stringify({ payroll_period_id: periodId }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed");
-      await fetchPayslips(periodId);
-      return body.data;
-    } catch (err) { handleError(err); throw err; }
-    finally { setIsLoading(false); }
-  }, [fetchPayslips]);
+    const result = await call<ComputeResult>(() => authFetch("/api/payslips/compute-all", {
+      method: "POST", body: JSON.stringify({ payroll_period_id: periodId }),
+    }));
+    await fetchPayslips(periodId);
+    return result;
+  }, [call, fetchPayslips]);
+
+  const addAdjustment = useCallback(async (payslipId: number, category: "earning" | "deduction", label: string, amount: number, note: string) => {
+    const updated = await call<Payslip>(() => authFetch(`/api/payslips/${payslipId}/adjust`, {
+      method: "POST", body: JSON.stringify({ category, label, amount, note }),
+    }));
+    setPayslips(prev => prev.map(p => p.id === payslipId ? updated : p));
+    if (selectedPayslip?.id === payslipId) setSelectedPayslip(updated);
+    return updated;
+  }, [call, selectedPayslip]);
 
   const approvePayslip = useCallback(async (id: number) => {
-    setIsLoading(true); setError(null);
-    try {
-      const res  = await authFetch(`/api/payslips/${id}/approve`, { method: "POST" });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed");
-      setPayslips(prev => prev.map(p => p.id === id ? body.data : p));
-    } catch (err) { handleError(err); throw err; }
-    finally { setIsLoading(false); }
-  }, []);
+    const updated = await call<Payslip>(() => authFetch(`/api/payslips/${id}/approve`, { method: "POST" }));
+    setPayslips(prev => prev.map(p => p.id === id ? updated : p));
+    if (selectedPayslip?.id === id) setSelectedPayslip(updated);
+  }, [call, selectedPayslip]);
 
-  const markPaid = useCallback(async (id: number) => {
-    setIsLoading(true); setError(null);
-    try {
-      const res  = await authFetch(`/api/payslips/${id}/pay`, { method: "POST" });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed");
-      setPayslips(prev => prev.map(p => p.id === id ? body.data : p));
-    } catch (err) { handleError(err); throw err; }
-    finally { setIsLoading(false); }
-  }, []);
+  const markAsPaid = useCallback(async (id: number) => {
+    const updated = await call<Payslip>(() => authFetch(`/api/payslips/${id}/pay`, { method: "POST" }));
+    setPayslips(prev => prev.map(p => p.id === id ? updated : p));
+    if (selectedPayslip?.id === id) setSelectedPayslip(updated);
+  }, [call, selectedPayslip]);
 
-  const addAdjustment = useCallback(async (
-    id: number,
-    data: { category: string; label: string; amount: number; note: string }
-  ) => {
-    setIsLoading(true); setError(null);
-    try {
-      const res  = await authFetch(`/api/payslips/${id}/adjust`, {
-        method: "POST", body: JSON.stringify(data),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed");
-      setPayslips(prev => prev.map(p => p.id === id ? body.data : p));
-      setSelectedPayslip(body.data);
-    } catch (err) { handleError(err); throw err; }
-    finally { setIsLoading(false); }
-  }, []);
+  const approveAll = useCallback(async (periodId: number) => {
+    const result = await call<{ count: number }>(() => authFetch(`/api/payslips/approve-all/${periodId}`, { method: "POST" }));
+    await fetchPayslips(periodId);
+    return result;
+  }, [call, fetchPayslips]);
 
-  const sendEmail = useCallback(async (id: number) => {
-    setIsLoading(true); setError(null);
-    try {
-      const res  = await authFetch(`/api/payslips/${id}/send-email`, { method: "POST" });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed to send email");
-      setPayslips(prev => prev.map(p => p.id === id ? { ...p, email_sent: true } : p));
-      return body.message as string;
-    } catch (err) { handleError(err); throw err; }
-    finally { setIsLoading(false); }
-  }, []);
-
-  const bulkSendEmail = useCallback(async (periodId: number) => {
-    setIsLoading(true); setError(null);
-    try {
-      const res  = await authFetch("/api/payslips/bulk-send-email", {
-        method: "POST", body: JSON.stringify({ payroll_period_id: periodId }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed");
-      return body.data;
-    } catch (err) { handleError(err); throw err; }
-    finally { setIsLoading(false); }
-  }, []);
-
-  // ─── Summary + Audit ───────────────────────────────────────────────────────
+  // ─── Summary & Audit ──────────────────────────────────────────────────────
 
   const fetchSummary = useCallback(async (periodId: number) => {
-    setIsLoading(true); setError(null);
-    try {
-      const res  = await authFetch(`/api/payslips/summary?payroll_period_id=${periodId}`);
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed");
-      setSummary(body.data);
-    } catch (err) { handleError(err); }
-    finally { setIsLoading(false); }
-  }, []);
+    const data = await call<PayrollSummary>(() => authFetch(`/api/payslips/summary?payroll_period_id=${periodId}`));
+    setSummary(data);
+  }, [call]);
 
   const fetchAuditLogs = useCallback(async (periodId?: number) => {
-    setIsLoading(true); setError(null);
-    try {
-      const params = periodId ? `?payroll_period_id=${periodId}` : "";
-      const res  = await authFetch(`/api/payslips/audit-trail${params}`);
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.message ?? "Failed");
-      setAuditLogs(body.data?.data ?? body.data ?? []);
-    } catch (err) { handleError(err); }
-    finally { setIsLoading(false); }
+    const params = periodId ? `?payroll_period_id=${periodId}` : "";
+    const data   = await call<{ data: AuditLog[] } | AuditLog[]>(() => authFetch(`/api/payslips/audit-trail${params}`));
+    setAuditLogs(Array.isArray(data) ? data : ((data as { data?: AuditLog[] }).data ?? []));
+  }, [call]);
+
+  // ─── Email & PDF ──────────────────────────────────────────────────────────
+
+  const sendEmail = useCallback(async (payslipId: number) => {
+    await call(() => authFetch(`/api/payslips/${payslipId}/send-email`, { method: "POST" }));
+    setPayslips(prev => prev.map(p => p.id === payslipId ? { ...p, email_sent: true } : p));
+  }, [call]);
+
+  const bulkSendEmail = useCallback(async (periodId: number) => {
+    return call<{ sent_count: number; failed_count: number }>(() => authFetch("/api/payslips/bulk-send-email", {
+      method: "POST", body: JSON.stringify({ payroll_period_id: periodId }),
+    }));
+  }, [call]);
+
+  const downloadPdf = useCallback((payslipId: number) => {
+    window.open(`/api/payslips/${payslipId}/pdf`, "_blank");
   }, []);
 
   return {
+    // State
     periods, payslips, selectedPayslip, summary, auditLogs, isLoading, error,
-    fetchPeriods, generateNextPeriod,
+    // Periods
+    fetchPeriods, createPeriod, generateNextPeriod,
+    // Payslips
     fetchPayslips, fetchPayslip, computeSingle, computeAll,
-    approvePayslip, markPaid, addAdjustment,
-    sendEmail, bulkSendEmail,
+    addAdjustment, approvePayslip, markAsPaid, approveAll,
+    // Summary & Audit
     fetchSummary, fetchAuditLogs,
-    setSelectedPayslip, clearError: () => setError(null),
+    // Email & PDF
+    sendEmail, bulkSendEmail, downloadPdf,
+    // Utils
+    clearSelected: () => setSelectedPayslip(null),
+    clearError: () => setError(null),
   };
 }

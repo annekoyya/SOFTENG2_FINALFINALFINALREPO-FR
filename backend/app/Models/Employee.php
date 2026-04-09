@@ -76,6 +76,7 @@ class Employee extends Model
         'employment_type',
         'reporting_manager',
         'basic_salary',
+        'shift_sched',
         'photo_path',
     ];
 
@@ -83,6 +84,7 @@ class Employee extends Model
         'date_of_birth' => 'date',
         'start_date'    => 'date',
         'end_date'      => 'date',
+        'shift_sched' => 'string',
         'basic_salary'  => 'decimal:2',
     ];
 

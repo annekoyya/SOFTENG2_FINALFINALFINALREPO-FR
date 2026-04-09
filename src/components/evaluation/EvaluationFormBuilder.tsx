@@ -1,351 +1,371 @@
 // src/components/evaluation/EvaluationFormBuilder.tsx
-import { useState } from "react";
+// REPLACE ENTIRE FILE
+
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Plus, X, GripVertical, ChevronDown } from "lucide-react";
-
-import type { EvaluationSection, EvaluationQuestion, LikertOption, CreateFormData } from "@/hooks/useEvaluation";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, Plus, X, GripVertical, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { authFetch } from "@/hooks/api";
+import type { EvaluationSection, EvaluationQuestion, LikertOption, CreateFormData, EvaluationForm } from "@/hooks/useEvaluation";
+import { cn } from "@/lib/utils";
 
 interface Props {
-  onSave: (data: CreateFormData) => Promise<void>;
-  onCancel: () => void;
+  onSave:     (data: CreateFormData) => Promise<void>;
+  onCancel:   () => void;
+  initialData?: EvaluationForm;
 }
 
 const DEPARTMENTS = [
-  "Human Resources", "Finance", "Front Office", "Food & Beverage",
-  "Housekeeping", "Rooms Division", "Security", "Engineering",
+  "Human Resources","Finance","Front Office","Food & Beverage",
+  "Housekeeping","Rooms Division","Security","Engineering",
+  "Sales & Marketing","All Departments",
 ];
 
 const DEFAULT_LIKERT: LikertOption[] = [
-  { label: "Excellent", value: 4 },
-  { label: "Great",     value: 3 },
-  { label: "Poor",      value: 2 },
-  { label: "Bad",       value: 1 },
+  { label: "Excellent", value: 5, order: 0 },
+  { label: "Very Good", value: 4, order: 1 },
+  { label: "Good",      value: 3, order: 2 },
+  { label: "Fair",      value: 2, order: 3 },
+  { label: "Poor",      value: 1, order: 4 },
 ];
 
-// Mock HR users — replace with real fetch
-const MOCK_HR_USERS = [
-  { id: 2,  name: "Ana Reyes" },
-  { id: 3,  name: "Roberto dela Cruz" },
-  { id: 4,  name: "Jerome Villanueva" },
-  { id: 5,  name: "Cindy Ong" },
-];
+interface HRUser { id: number; name: string; email: string; role: string; }
 
-export function EvaluationFormBuilder({ onSave, onCancel }: Props) {
-  const [title, setTitle]           = useState("");
-  const [department, setDepartment] = useState("");
-  const [evaluators, setEvaluators] = useState<number[]>([]);
-  const [dateStart, setDateStart]   = useState("");
-  const [dateEnd, setDateEnd]       = useState("");
-  const [sections, setSections]     = useState<EvaluationSection[]>([
-    {
-      title: "Collaboration Skills",
-      description: "Rate the collaborative skills of the department",
-      type: "likert",
-      likert_options: [...DEFAULT_LIKERT],
-      questions: [
-        { text: "Demonstrate strong cooperation.", type: "likert", order: 0 },
-        { text: "Teamwork and Collaboration is seen.", type: "likert", order: 1 },
-        { text: "Supports colleagues effectively", type: "likert", order: 2 },
-        { text: "Coordinates tasks smoothly", type: "likert", order: 3 },
-      ],
-      order: 0,
-    },
-  ]);
-  const [openQuestions, setOpenQuestions] = useState<EvaluationQuestion[]>([
-    { text: "Were there any problems faced during this period? If so, what is it?", type: "open_ended", order: 0 },
-    { text: "What were their accomplishments?", type: "open_ended", order: 1 },
-  ]);
-  const [saving, setSaving] = useState(false);
+export function EvaluationFormBuilder({ onSave, onCancel, initialData }: Props) {
+  const { toast }                           = useToast();
+  const [title,       setTitle]             = useState(initialData?.title ?? "");
+  const [department,  setDepartment]        = useState(initialData?.department ?? "");
+  const [dateStart,   setDateStart]         = useState(initialData?.date_start?.slice(0,10) ?? "");
+  const [deadline,    setDeadline]          = useState(initialData?.deadline?.slice(0,10) ?? "");
+  const [evaluators,  setEvaluators]        = useState<number[]>(() =>
+    initialData?.assignments?.map(a => a.user_id) ?? []);
+  const [hrUsers,     setHrUsers]           = useState<HRUser[]>([]);
+  const [showUserDD,  setShowUserDD]        = useState(false);
+  const [saving,      setSaving]            = useState(false);
 
-  // ─── Section Helpers ──────────────────────────────────────────────────────
+  // Sections = Likert grids
+  const [sections,    setSections]          = useState<EvaluationSection[]>(() => {
+    const existing = initialData?.sections?.filter(s => s.type === "likert") ?? [];
+    if (existing.length) return existing.map((s,i) => ({ ...s, order: i, likert_options: s.likert_options?.length ? s.likert_options : [...DEFAULT_LIKERT] }));
+    return [{ title: "", description: "", type: "likert", likert_options: [...DEFAULT_LIKERT], questions: [], order: 0 }];
+  });
 
-  const addSection = () => {
-    setSections(prev => [...prev, {
-      title: "New Section", description: "", type: "likert", order: prev.length,
-      likert_options: [...DEFAULT_LIKERT], questions: [],
-    }]);
-  };
+  // Open-ended questions
+  const [openQs, setOpenQs] = useState<EvaluationQuestion[]>(() =>
+    initialData?.sections?.find(s => s.type === "open_ended")?.questions ?? []);
 
-  const updateSection = (idx: number, field: keyof EvaluationSection, value: unknown) => {
-    setSections(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s));
-  };
+  // Fetch real HR users
+  useEffect(() => {
+    authFetch("/api/employees?role=HR")
+      .then(r => r.json())
+      .then(body => {
+        const data = body.data?.data ?? body.data ?? [];
+        setHrUsers(Array.isArray(data) ? data.map((e: { id: number; first_name: string; last_name: string; role: string; email: string }) => ({
+          id: e.id, name: `${e.first_name} ${e.last_name}`, email: e.email, role: e.role,
+        })) : []);
+      })
+      .catch(() => setHrUsers([]));
+  }, []);
 
-  const addLikertRow = (sectionIdx: number) => {
-    setSections(prev => prev.map((s, i) => i === sectionIdx ? {
-      ...s,
-      questions: [...s.questions, { text: "", type: "likert" as const, order: s.questions.length }],
+  // ─── Section helpers ──────────────────────────────────────────────────────
+
+  const addSection = () =>
+    setSections(p => [...p, { title: "", description: "", type: "likert", order: p.length, likert_options: [...DEFAULT_LIKERT], questions: [] }]);
+
+  const removeSection = (i: number) =>
+    setSections(p => p.filter((_, j) => j !== i));
+
+  const setSection = (i: number, field: keyof EvaluationSection, value: unknown) =>
+    setSections(p => p.map((s, j) => j === i ? { ...s, [field]: value } : s));
+
+  const addQuestion = (si: number) =>
+    setSections(p => p.map((s, i) => i === si ? {
+      ...s, questions: [...s.questions, { text: "", type: "likert" as const, order: s.questions.length }],
     } : s));
-  };
 
-  const addLikertColumn = (sectionIdx: number) => {
-    setSections(prev => prev.map((s, i) => i === sectionIdx ? {
-      ...s,
-      likert_options: [...s.likert_options, { label: "New", value: s.likert_options.length + 1 }],
+  const setQuestion = (si: number, qi: number, text: string) =>
+    setSections(p => p.map((s, i) => i === si ? {
+      ...s, questions: s.questions.map((q, j) => j === qi ? { ...q, text } : q),
     } : s));
-  };
 
-  const updateLikertOption = (sectionIdx: number, optIdx: number, label: string) => {
-    setSections(prev => prev.map((s, i) => i === sectionIdx ? {
-      ...s,
-      likert_options: s.likert_options.map((o, j) => j === optIdx ? { ...o, label } : o),
+  const removeQuestion = (si: number, qi: number) =>
+    setSections(p => p.map((s, i) => i === si ? {
+      ...s, questions: s.questions.filter((_, j) => j !== qi),
     } : s));
-  };
 
-  const updateQuestion = (sectionIdx: number, qIdx: number, text: string) => {
-    setSections(prev => prev.map((s, i) => i === sectionIdx ? {
-      ...s,
-      questions: s.questions.map((q, j) => j === qIdx ? { ...q, text } : q),
+  const addColumn = (si: number) =>
+    setSections(p => p.map((s, i) => i === si ? {
+      ...s, likert_options: [...s.likert_options, { label: "New", value: s.likert_options.length + 1, order: s.likert_options.length }],
     } : s));
-  };
 
-  const removeQuestion = (sectionIdx: number, qIdx: number) => {
-    setSections(prev => prev.map((s, i) => i === sectionIdx ? {
-      ...s,
-      questions: s.questions.filter((_, j) => j !== qIdx),
+  const setColumn = (si: number, oi: number, label: string) =>
+    setSections(p => p.map((s, i) => i === si ? {
+      ...s, likert_options: s.likert_options.map((o, j) => j === oi ? { ...o, label } : o),
     } : s));
-  };
 
-  const removeSection = (idx: number) => {
-    setSections(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  // ─── Open Questions ───────────────────────────────────────────────────────
-
-  const addOpenQuestion = () => {
-    setOpenQuestions(prev => [...prev, { text: "", type: "open_ended", order: prev.length }]);
-  };
-
-  const updateOpenQuestion = (idx: number, text: string) => {
-    setOpenQuestions(prev => prev.map((q, i) => i === idx ? { ...q, text } : q));
-  };
-
-  const removeOpenQuestion = (idx: number) => {
-    setOpenQuestions(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  // ─── Evaluator Toggle ─────────────────────────────────────────────────────
-
-  const toggleEvaluator = (id: number) => {
-    setEvaluators(prev =>
-      prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]
-    );
-  };
+  const removeColumn = (si: number, oi: number) =>
+    setSections(p => p.map((s, i) => i === si ? {
+      ...s, likert_options: s.likert_options.filter((_, j) => j !== oi),
+    } : s));
 
   // ─── Submit ───────────────────────────────────────────────────────────────
 
-  const handleSave = async (asDraft = false) => {
+  const submit = async (asDraft: boolean) => {
+    if (!title.trim())  { toast({ title: "Enter evaluation name",   variant: "destructive" }); return; }
+    if (!department)    { toast({ title: "Select a department",     variant: "destructive" }); return; }
+    if (evaluators.length === 0 && !asDraft) {
+      toast({ title: "Select at least one evaluator", variant: "destructive" }); return;
+    }
+
+    // Filter out empty questions / sections
+    const cleanSections: EvaluationSection[] = sections
+      .filter(s => s.title.trim() && s.questions.some(q => q.text.trim()))
+      .map(s => ({ ...s, questions: s.questions.filter(q => q.text.trim()) }));
+
+    const cleanOpen = openQs.filter(q => q.text.trim());
+    if (!asDraft && cleanSections.length === 0 && cleanOpen.length === 0) {
+      toast({ title: "Add at least one question before sending", variant: "destructive" }); return;
+    }
+
+    const allSections: EvaluationSection[] = [
+      ...cleanSections,
+      ...(cleanOpen.length ? [{ title: "Feedback Questions", description: "", type: "open_ended" as const, likert_options: [], questions: cleanOpen, order: cleanSections.length }] : []),
+    ];
+
     setSaving(true);
     try {
-      const allSections: EvaluationSection[] = [
-        ...sections,
-        ...(openQuestions.length > 0 ? [{
-          title: "Questions", description: "", type: "open_ended" as const,
-          likert_options: [], questions: openQuestions, order: sections.length,
-        }] : []),
-      ];
-      await onSave({
-        title, department, deadline: dateEnd,
-        sections: allSections, evaluator_ids: evaluators,
-        save_as_draft: asDraft,
-      });
+      await onSave({ title, department, deadline: deadline || undefined, date_start: dateStart || undefined, sections: allSections, evaluator_ids: evaluators, save_as_draft: asDraft });
     } finally { setSaving(false); }
   };
 
+  const canSend = title.trim() && department && evaluators.length > 0;
+
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-5xl mx-auto p-6 space-y-6">
+
       {/* Header */}
-      <div className="mb-6 flex items-center gap-3">
-        <button onClick={onCancel} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="h-4 w-4" />
+      <div className="flex items-center gap-3">
+        <button onClick={onCancel} className="text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="h-5 w-5" />
         </button>
-        <div className="text-sm text-muted-foreground">
-          Performance Management / <span className="text-foreground font-medium">Create Evaluation</span>
+        <h1 className="text-xl font-bold">{initialData ? "Edit Evaluation" : "Create Evaluation"}</h1>
+      </div>
+
+      {/* Basic info card */}
+      <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+        <div>
+          <label className="text-sm font-medium">Evaluation Name <span className="text-red-500">*</span></label>
+          <Input className="mt-1" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g., Q4 2024 Performance Review" />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-sm font-medium">Department <span className="text-red-500">*</span></label>
+            <Select value={department} onValueChange={setDepartment}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="Select department" /></SelectTrigger>
+              <SelectContent>{DEPARTMENTS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          {/* Evaluator multi-select */}
+          <div className="relative">
+            <label className="text-sm font-medium">Evaluators <span className="text-red-500">*</span></label>
+            <button
+              type="button"
+              onClick={() => setShowUserDD(p => !p)}
+              className="mt-1 flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <span className={evaluators.length === 0 ? "text-muted-foreground" : ""}>
+                {evaluators.length === 0 ? "Select HR evaluators" : `${evaluators.length} selected`}
+              </span>
+              {showUserDD ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </button>
+            {showUserDD && (
+              <div className="absolute z-20 mt-1 w-full rounded-md border border-border bg-card shadow-lg max-h-52 overflow-y-auto">
+                {hrUsers.length === 0 ? (
+                  <p className="px-3 py-3 text-sm text-muted-foreground">No HR users found. Employees with role=HR will appear here.</p>
+                ) : hrUsers.map(u => (
+                  <label key={u.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/30 cursor-pointer text-sm">
+                    <input type="checkbox" className="rounded" checked={evaluators.includes(u.id)} onChange={() =>
+                      setEvaluators(p => p.includes(u.id) ? p.filter(x => x !== u.id) : [...p, u.id])} />
+                    <div>
+                      <p className="font-medium">{u.name}</p>
+                      <p className="text-xs text-muted-foreground">{u.role}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+            {/* Selected badges */}
+            {evaluators.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {evaluators.map(id => {
+                  const u = hrUsers.find(x => x.id === id);
+                  return u ? (
+                    <Badge key={id} className="text-xs bg-blue-100 text-blue-700 border-0 gap-1">
+                      {u.name}
+                      <button onClick={() => setEvaluators(p => p.filter(x => x !== id))}>
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </Badge>
+                  ) : null;
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-sm font-medium">Start Date</label>
+            <Input type="date" className="mt-1" value={dateStart} onChange={e => setDateStart(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Deadline</label>
+            <Input type="date" className="mt-1" value={deadline} onChange={e => setDeadline(e.target.value)} />
+          </div>
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-6 space-y-6">
-        {/* Basic Info */}
-        <div className="space-y-4">
-          <div>
-            <label className="text-sm font-medium">Evaluation Name</label>
-            <Input className="mt-1" value={title} onChange={e => setTitle(e.target.value)}
-              placeholder="e.g. Annual Performance Evaluation" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium">Department</label>
-              <Select value={department} onValueChange={setDepartment}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select department" /></SelectTrigger>
-                <SelectContent>
-                  {DEPARTMENTS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                </SelectContent>
-              </Select>
+      {/* Likert sections */}
+      {sections.map((section, si) => (
+        <div key={si} className="rounded-xl border border-border bg-card p-5 space-y-3">
+          <div className="flex items-start gap-3">
+            <div className="flex-1 space-y-1">
+              <Input
+                value={section.title}
+                onChange={e => setSection(si, "title", e.target.value)}
+                className="font-semibold border-0 p-0 h-auto text-base shadow-none focus-visible:ring-0 bg-transparent"
+                placeholder="Section title (e.g., Communication Skills) *"
+              />
+              <Input
+                value={section.description ?? ""}
+                onChange={e => setSection(si, "description", e.target.value)}
+                className="text-sm text-muted-foreground border-0 p-0 h-auto shadow-none focus-visible:ring-0 bg-transparent"
+                placeholder="Description (optional)"
+              />
             </div>
-            <div>
-              <label className="text-sm font-medium">Evaluator</label>
-              {/* Multi-select dropdown */}
-              <div className="relative mt-1">
-                <button className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring">
-                  <span className="text-muted-foreground">
-                    {evaluators.length === 0 ? "Select evaluators" : `${evaluators.length} selected`}
-                  </span>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                </button>
-                {/* Inline checklist */}
-                <div className="mt-1 rounded-md border border-border bg-card p-2 space-y-1 max-h-40 overflow-y-auto">
-                  {MOCK_HR_USERS.map(u => (
-                    <label key={u.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted cursor-pointer text-sm">
-                      <input type="checkbox" checked={evaluators.includes(u.id)}
-                        onChange={() => toggleEvaluator(u.id)}
-                        className="rounded border-border" />
-                      {u.name}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium">Date Start</label>
-              <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)}
-                className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Date End</label>
-              <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)}
-                className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
-            </div>
-          </div>
-        </div>
-
-        {/* Likert Sections */}
-        {sections.map((section, sIdx) => (
-          <div key={sIdx} className="rounded-lg border border-border p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex-1 space-y-1">
-                <Input value={section.title}
-                  onChange={e => updateSection(sIdx, "title", e.target.value)}
-                  className="font-semibold border-none p-0 h-auto text-base focus-visible:ring-0 bg-transparent"
-                  placeholder="Section title" />
-                <Input value={section.description ?? ""}
-                  onChange={e => updateSection(sIdx, "description", e.target.value)}
-                  className="text-sm text-muted-foreground border-none p-0 h-auto focus-visible:ring-0 bg-transparent"
-                  placeholder="Section description (optional)" />
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" className="gap-1 text-xs"
-                  onClick={() => addLikertColumn(sIdx)}>
-                  <Plus className="h-3 w-3" /> Add Likert Scale
-                </Button>
-                <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                  onClick={() => removeSection(sIdx)}>
+            <div className="flex gap-2 shrink-0">
+              <Button variant="outline" size="sm" className="text-xs gap-1" onClick={() => addColumn(si)}>
+                <Plus className="h-3 w-3" /> Column
+              </Button>
+              {sections.length > 1 && (
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-red-500" onClick={() => removeSection(si)}>
                   <X className="h-4 w-4" />
                 </Button>
-              </div>
+              )}
             </div>
+          </div>
 
-            {/* Likert Grid */}
-            <div className="rounded-md border border-border overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/30">
-                  <tr>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-1/2"></th>
-                    {section.likert_options.map((opt, oIdx) => (
-                      <th key={oIdx} className="px-3 py-2 text-center">
-                        <input value={opt.label}
-                          onChange={e => updateLikertOption(sIdx, oIdx, e.target.value)}
-                          className="w-full text-center text-xs font-medium bg-transparent border-none outline-none" />
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {section.questions.map((q, qIdx) => (
-                    <tr key={qIdx} className="group hover:bg-muted/20">
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <GripVertical className="h-3 w-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100" />
-                          <input value={q.text}
-                            onChange={e => updateQuestion(sIdx, qIdx, e.target.value)}
-                            className="flex-1 bg-transparent border-none outline-none text-sm"
-                            placeholder="Enter question..." />
-                          <button onClick={() => removeQuestion(sIdx, qIdx)}
-                            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive">
-                            <X className="h-3 w-3" />
+          {/* Likert grid table */}
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-sm min-w-[500px]">
+              <thead className="bg-muted/30">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-2/5">Question</th>
+                  {section.likert_options.map((opt, oi) => (
+                    <th key={oi} className="px-2 py-2 text-center min-w-[80px]">
+                      <div className="flex items-center justify-center gap-1">
+                        <input
+                          value={opt.label}
+                          onChange={e => setColumn(si, oi, e.target.value)}
+                          className="w-full text-center text-xs bg-transparent border-none outline-none font-medium"
+                          placeholder="Label"
+                        />
+                        {section.likert_options.length > 2 && (
+                          <button onClick={() => removeColumn(si, oi)} className="text-muted-foreground/40 hover:text-red-500 shrink-0">
+                            <X className="h-2.5 w-2.5" />
                           </button>
+                        )}
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {section.questions.length === 0 && (
+                  <tr><td colSpan={section.likert_options.length + 1} className="px-3 py-4 text-center text-xs text-muted-foreground">
+                    No questions yet — click "Add Question" below
+                  </td></tr>
+                )}
+                {section.questions.map((q, qi) => (
+                  <tr key={qi} className="group hover:bg-muted/20">
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <GripVertical className="h-3 w-3 text-muted-foreground/30" />
+                        <input
+                          value={q.text}
+                          onChange={e => setQuestion(si, qi, e.target.value)}
+                          className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground"
+                          placeholder="Enter question..."
+                        />
+                        <button onClick={() => removeQuestion(si, qi)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </td>
+                    {section.likert_options.map((_, oi) => (
+                      <td key={oi} className="px-2 py-2 text-center">
+                        <div className="flex justify-center">
+                          <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30" />
                         </div>
                       </td>
-                      {section.likert_options.map((_, oIdx) => (
-                        <td key={oIdx} className="px-3 py-2 text-center">
-                          <div className="flex justify-center">
-                            <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30 bg-muted/20" />
-                          </div>
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="flex border-t border-border">
-                <button onClick={() => addLikertRow(sIdx)}
-                  className="flex-1 px-3 py-2 text-xs text-muted-foreground hover:bg-muted/30 text-left transition-colors">
-                  + Add Row
-                </button>
-                <button onClick={() => addLikertColumn(sIdx)}
-                  className="flex-1 px-3 py-2 text-xs text-muted-foreground hover:bg-muted/30 text-right transition-colors border-l border-border">
-                  Add Column +
-                </button>
-              </div>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <button
+              onClick={() => addQuestion(si)}
+              className="w-full px-3 py-2 text-xs text-muted-foreground hover:bg-muted/20 text-left border-t border-border"
+            >
+              + Add Question
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {/* Add section */}
+      <Button variant="outline" className="w-full border-dashed gap-2" onClick={addSection}>
+        <Plus className="h-4 w-4" /> Add Likert Section
+      </Button>
+
+      {/* Open-ended section */}
+      <div className="rounded-xl border border-border bg-card p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-sm">Feedback Questions (Open-ended)</h3>
+          <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={() => setOpenQs(p => [...p, { text: "", type: "open_ended", order: p.length }])}>
+            <Plus className="h-3 w-3" /> Add
+          </Button>
+        </div>
+        {openQs.length === 0
+          ? <p className="text-xs text-muted-foreground text-center py-3">No open-ended questions yet</p>
+          : openQs.map((q, i) => (
+            <div key={i} className="group flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
+              <input
+                value={q.text}
+                onChange={e => setOpenQs(p => p.map((x, j) => j === i ? { ...x, text: e.target.value } : x))}
+                className="flex-1 bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground"
+                placeholder="Enter open-ended question..."
+              />
+              <button onClick={() => setOpenQs(p => p.filter((_, j) => j !== i))} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-500">
+                <X className="h-3 w-3" />
+              </button>
             </div>
-          </div>
-        ))}
+          ))
+        }
+      </div>
 
-        {/* Add Section */}
-        <Button variant="outline" className="w-full gap-2 border-dashed" onClick={addSection}>
-          <Plus className="h-4 w-4" /> Add Likert Scale Section
+      {/* Footer actions */}
+      <div className="flex justify-end gap-3 pb-8">
+        <Button variant="outline" onClick={onCancel}>Cancel</Button>
+        <Button variant="outline" onClick={() => submit(true)} disabled={saving || !title.trim()}>
+          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save as Draft
         </Button>
-
-        {/* Open-Ended Questions */}
-        <div className="rounded-lg border border-border p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="font-semibold text-base">Questions</p>
-            <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={addOpenQuestion}>
-              <Plus className="h-3 w-3" /> Feedback Questions
-            </Button>
-          </div>
-          <div className="space-y-3">
-            {openQuestions.map((q, idx) => (
-              <div key={idx} className="group rounded-md border border-border bg-muted/10 p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <input value={q.text} onChange={e => updateOpenQuestion(idx, e.target.value)}
-                    className="flex-1 bg-transparent border-none outline-none text-sm font-medium"
-                    placeholder="Enter open-ended question..." />
-                  <button onClick={() => removeOpenQuestion(idx)}
-                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive shrink-0 mt-0.5">
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-                <div className="mt-2 h-px w-full bg-border" />
-                <div className="mt-2 h-4 w-2/3 bg-muted rounded" />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex justify-end gap-3 pt-2">
-          <Button variant="outline" onClick={() => handleSave(true)} disabled={saving}>
-            Save as Draft
-          </Button>
-          <Button onClick={() => handleSave(false)} disabled={saving || !title || !department || evaluators.length === 0}>
-            {saving ? "Sending..." : "Send"}
-          </Button>
-        </div>
+        <Button onClick={() => submit(false)} disabled={saving || !canSend} className="bg-blue-600 hover:bg-blue-700">
+          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {initialData ? "Update & Send" : "Send to Evaluators"}
+        </Button>
       </div>
     </div>
   );

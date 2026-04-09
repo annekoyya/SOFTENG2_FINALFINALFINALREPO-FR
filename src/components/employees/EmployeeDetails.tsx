@@ -1,230 +1,163 @@
-import { Employee } from "@/types/employee";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+// src/components/employees/EmployeeDetails.tsx
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Mail,
-  Phone,
-  MapPin,
-  Calendar,
-  Briefcase,
-  Building2,
-  DollarSign,
-  User,
-  FileText,
-  AlertCircle,
-  Pencil,
-} from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Separator } from "@/components/ui/separator";
+import { Pencil, Archive, Download, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-interface EmployeeDetailsProps {
-  employee: Employee;
-  onEdit: () => void;
-  onClose: () => void;
+import type { Employee } from "@/app/types/employee";
+interface Props {
+  employee: Employee | null;
+  open: boolean;
+  onClose:   () => void;
+  onEdit:    (emp: Employee) => void;
+  onArchive: (emp: Employee) => void;
+  isAdmin:   boolean;
 }
 
-const statusStyles = {
-  active: "bg-success/10 text-success border-success/20",
-  on_leave: "bg-warning/10 text-warning border-warning/20",
-  terminated: "bg-destructive/10 text-destructive border-destructive/20",
-  suspended: "bg-muted text-muted-foreground border-muted",
+const statusColors: Record<string, string> = {
+  active:     "bg-green-100 text-green-700",
+  on_leave:   "bg-yellow-100 text-yellow-700",
+  suspended:  "bg-orange-100 text-orange-700",
+  terminated: "bg-red-100 text-red-700",
 };
 
-const statusLabels = {
-  active: "Active",
-  on_leave: "On Leave",
-  terminated: "Terminated",
-  suspended: "Suspended",
+const roleColors: Record<string, string> = {
+  Admin:      "bg-purple-100 text-purple-700",
+  HR:         "bg-blue-100 text-blue-700",
+  Manager:    "bg-indigo-100 text-indigo-700",
+  Accountant: "bg-teal-100 text-teal-700",
+  Employee:   "bg-gray-100 text-gray-600",
 };
 
-export function EmployeeDetails({ employee, onEdit, onClose }: EmployeeDetailsProps) {
-  // Format salary helper
-  const formatSalary = (salary: number | string | undefined) => {
-    if (!salary) return '0';
-    const numSalary = typeof salary === 'string' ? parseFloat(salary) : salary;
-    return numSalary.toLocaleString();
+function Row({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="flex justify-between py-2">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-sm font-medium text-foreground text-right max-w-[55%]">
+        {value ?? <span className="text-muted-foreground/50">—</span>}
+      </span>
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-1">{title}</p>
+      <div className="divide-y divide-border">{children}</div>
+    </div>
+  );
+}
+
+export function EmployeeDetails({ employee, open, onClose, onEdit, onArchive, isAdmin }: Props) {
+  if (!employee) return null;
+
+  const fullName = [employee.first_name, employee.middle_name, employee.last_name, employee.name_extension]
+    .filter(Boolean).join(" ");
+
+  const handleExport = () => {
+    const blob = new Blob([JSON.stringify(employee, null, 2)], { type: "application/json" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `employee_${employee.id}_${employee.last_name}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-4">
-          <Avatar className="h-20 w-20 border-4 border-primary/20">
-            <AvatarFallback className="bg-primary/10 text-primary text-2xl font-semibold">
-              {employee.first_name[0]}{employee.last_name[0]}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <h2 className="font-display text-2xl font-semibold text-card-foreground">
-              {employee.first_name} {employee.last_name}
-            </h2>
-            <p className="text-muted-foreground">{employee.id || 'N/A'}</p>
-            <Badge
-              variant="outline"
-              className={cn("mt-2 capitalize", statusStyles[employee.status])}
-            >
-              {statusLabels[employee.status]}
-            </Badge>
+    <Sheet open={open} onOpenChange={onClose}>
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetHeader className="mb-4">
+          <SheetTitle>Employee Profile</SheetTitle>
+        </SheetHeader>
+
+        {/* Hero */}
+        <div className="flex items-center gap-4 mb-6">
+          <div className="h-16 w-16 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-xl shrink-0">
+            {employee.first_name[0]}{employee.last_name[0]}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg font-semibold text-foreground truncate">{fullName}</h2>
+            <p className="text-sm text-muted-foreground">{employee.job_category} · {employee.department}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge className={cn("text-xs border-0 capitalize", statusColors[employee.status])}>
+                {employee.status.replace("_", " ")}
+              </Badge>
+              <Badge className={cn("text-xs border-0", roleColors[employee.role])}>
+                <Shield className="h-3 w-3 mr-1" />{employee.role}
+              </Badge>
+            </div>
           </div>
         </div>
-        <Button onClick={onEdit} variant="outline" size="sm">
-          <Pencil className="mr-2 h-4 w-4" />
-          Edit Profile
-        </Button>
-      </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="employment">Employment</TabsTrigger>
-          <TabsTrigger value="documents">Documents</TabsTrigger>
-        </TabsList>
-
-        {/* Overview Tab */}
-        <TabsContent value="overview" className="space-y-6 pt-6">
-          <div className="grid gap-6 sm:grid-cols-2">
-            {/* Contact Information */}
-            <div className="rounded-lg border border-border bg-card p-4">
-              <h3 className="mb-4 font-semibold text-card-foreground">Contact Information</h3>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 text-sm">
-                  <Mail className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Email:</span>
-                  <a href={`mailto:${employee.email}`} className="text-primary hover:underline">
-                    {employee.email}
-                  </a>
-                </div>
-                <div className="flex items-center gap-3 text-sm">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Phone:</span>
-                  <span>{employee.phone_number || 'N/A'}</span>
-                </div>
-                <div className="flex items-start gap-3 text-sm">
-                  <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
-                  <span className="text-muted-foreground">Address:</span>
-                  <span className="flex-1">
-                    {employee.home_address || 'N/A'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Personal Information */}
-            <div className="rounded-lg border border-border bg-card p-4">
-              <h3 className="mb-4 font-semibold text-card-foreground">Personal Information</h3>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 text-sm">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Date of Birth:</span>
-                  <span>
-                    {employee.date_of_birth ? new Date(employee.date_of_birth).toLocaleDateString("en-PH", {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    }) : 'N/A'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Emergency Contact */}
-          {employee.emergency_contact_name && (
-            <div className="rounded-lg border border-warning/30 bg-warning/5 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <AlertCircle className="h-4 w-4 text-warning" />
-                <h3 className="font-semibold text-card-foreground">Emergency Contact</h3>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Name: </span>
-                  <span>{employee.emergency_contact_name}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Phone: </span>
-                  <span>{employee.emergency_contact_number || 'N/A'}</span>
-                </div>
-              </div>
-            </div>
+        {/* Actions */}
+        <div className="flex gap-2 mb-6">
+          <Button variant="outline" size="sm" className="gap-1" onClick={handleExport}>
+            <Download className="h-4 w-4" /> Export
+          </Button>
+          {isAdmin && (
+            <>
+              <Button variant="outline" size="sm" className="gap-1" onClick={() => onEdit(employee)}>
+                <Pencil className="h-4 w-4" /> Edit
+              </Button>
+              <Button variant="outline" size="sm"
+                className="gap-1 text-red-600 hover:text-red-600 border-red-200 hover:bg-red-50"
+                onClick={() => { onArchive(employee); onClose(); }}>
+                <Archive className="h-4 w-4" /> Archive
+              </Button>
+            </>
           )}
-        </TabsContent>
+        </div>
 
-        {/* Employment Tab */}
-        <TabsContent value="employment" className="space-y-6 pt-6">
-          <div className="grid gap-6 sm:grid-cols-2">
-            <div className="rounded-lg border border-border bg-card p-4">
-              <h3 className="mb-4 font-semibold text-card-foreground">Position Details</h3>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 text-sm">
-                  <Building2 className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Department:</span>
-                  <span>{employee.department || 'N/A'}</span>
-                </div>
-                <div className="flex items-center gap-3 text-sm">
-                  <Briefcase className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Job Category:</span>
-                  <span>{employee.job_category || 'N/A'}</span>
-                </div>
-                <div className="flex items-center gap-3 text-sm">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Employment Type:</span>
-                  <span className="capitalize">{employee.employment_type || 'N/A'}</span>
-                </div>
-                <div className="flex items-center gap-3 text-sm">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Shift Schedule:</span>
-                  <span className="capitalize">{employee.shift_sched || 'N/A'}</span>
-                </div>
-              </div>
-            </div>
+        <div className="space-y-6">
+          <Section title="Personal Information">
+            <Row label="Full Name"      value={fullName} />
+            <Row label="Date of Birth"  value={employee.date_of_birth} />
+            <Row label="Email"          value={employee.email} />
+            <Row label="Phone Number"   value={employee.phone_number} />
+            <Row label="Home Address"   value={employee.home_address} />
+          </Section>
 
-            <div className="rounded-lg border border-border bg-card p-4">
-              <h3 className="mb-4 font-semibold text-card-foreground">Compensation</h3>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 text-sm">
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Monthly Salary:</span>
-                  <span className="font-semibold text-primary">
-                    ₱{formatSalary(employee.basic_salary)}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 text-sm">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">Start Date:</span>
-                  <span>
-                    {employee.start_date ? new Date(employee.start_date).toLocaleDateString("en-PH", {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    }) : 'N/A'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </TabsContent>
+          <Separator />
 
-        {/* Documents Tab */}
-        <TabsContent value="documents" className="space-y-6 pt-6">
-          <div className="rounded-lg border border-dashed border-border bg-muted/30 p-8 text-center">
-            <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
-            <p className="mt-4 font-medium text-card-foreground">No documents uploaded</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Documents like resume, contracts, and IDs will appear here.
-            </p>
-          </div>
-        </TabsContent>
-      </Tabs>
+          <Section title="Employment">
+            <Row label="Employee ID"      value={`#${String(employee.id).padStart(5, "0")}`} />
+            <Row label="Department"       value={employee.department} />
+            <Row label="Job Category"     value={employee.job_category} />
+            <Row label="Employment Type"  value={employee.employment_type.replace("_", " ")} />
+            <Row label="Shift Schedule"   value={`${employee.shift_sched.charAt(0).toUpperCase() + employee.shift_sched.slice(1)} shift`} />
+            <Row label="Start Date"       value={employee.start_date} />
+            <Row label="Basic Salary"     value={`₱${Number(employee.basic_salary).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`} />
+          </Section>
 
-      {/* Footer Actions */}
-      <div className="flex justify-end border-t border-border pt-4">
-        <Button variant="outline" onClick={onClose}>
-          Close
-        </Button>
-      </div>
-    </div>
+          <Separator />
+
+          <Section title="Emergency Contact">
+            <Row label="Name"         value={employee.emergency_contact_name} />
+            <Row label="Number"       value={employee.emergency_contact_number} />
+            <Row label="Relationship" value={employee.relationship} />
+          </Section>
+
+          <Separator />
+
+          <Section title="Government IDs">
+            <Row label="TIN"            value={employee.tin} />
+            <Row label="SSS Number"     value={employee.sss_number} />
+            <Row label="Pag-IBIG"       value={employee.pagibig_number} />
+            <Row label="PhilHealth"     value={employee.philhealth_number} />
+          </Section>
+
+          <Separator />
+
+          <Section title="Banking">
+            <Row label="Bank Name"       value={employee.bank_name} />
+            <Row label="Account Name"    value={employee.account_name} />
+            <Row label="Account Number"  value={employee.account_number} />
+          </Section>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }

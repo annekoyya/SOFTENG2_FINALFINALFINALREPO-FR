@@ -1,242 +1,251 @@
 // src/pages/Employees.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { useEmployees } from "@/hooks/useEmployees";
 import { EmployeeTable } from "@/components/employees/EmployeeTable";
 import { EmployeeForm } from "@/components/employees/EmployeeForm";
 import { EmployeeDetails } from "@/components/employees/EmployeeDetails";
-import { DeleteEmployeeDialog } from "@/components/employees/DeleteEmployeeDialog";
-import NewHireTab from "@/components/employees/NewHireTab";
-import { useEmployees } from "@/hooks/useEmployees";
-import { useAuth } from "@/hooks/useAuth";
+import { NewHireTab } from "@/components/employees/NewHireTab";
+import { RotateCcw, Trash2, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { Employee } from "@/types/employee";
-import { EmployeeFormData } from "@/types/employee";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Sheet, SheetContent, SheetHeader, SheetTitle,
-} from "@/components/ui/sheet";
-import { UserPlus } from "lucide-react";
-
-type ViewMode = "list" | "add" | "edit" | "view";
 
 export default function Employees() {
+  const { toast }         = useToast();
+  const { user }          = useAuth();
+  const isAdmin           = user?.role === "Admin";
+
   const {
-    employees,
-    archivedEmployees,
-    isLoading,
-    fetchEmployees,
-    fetchArchivedEmployees,
-    addEmployee,
-    updateEmployee,
-    deleteEmployee,
-    restoreEmployee,
-    purgeEmployee,
+    employees, archivedEmployees, isLoading,
+    fetchEmployees, fetchArchived,
+    createEmployee, updateEmployee,
+    archiveEmployee, restoreEmployee, purgeEmployee,
   } = useEmployees();
 
-  const { user } = useAuth();
-  const isAdmin = user?.role === "Admin";
+  const [tab, setTab]                           = useState("directory");
+  const [viewEmp,  setViewEmp]                  = useState<Employee | null>(null);
+  const [editEmp,  setEditEmp]                  = useState<Employee | null>(null);
+  const [archiveTarget, setArchiveTarget]       = useState<Employee | null>(null);
+  const [purgeTarget, setPurgeTarget]           = useState<Employee | null>(null);
+  const [formOpen, setFormOpen]                 = useState(false);
+  const [filters, setFilters]                   = useState({ search: "", status: "" });
 
-  const [viewMode, setViewMode]                   = useState<ViewMode>("list");
-  const [activeTab, setActiveTab]                 = useState("employees");
-  const [selectedEmployee, setSelectedEmployee]   = useState<Employee | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen]   = useState(false);
-  const [employeeToDelete, setEmployeeToDelete]   = useState<Employee | null>(null);
-  const [purgeDialogOpen, setPurgeDialogOpen]     = useState(false);
-  const [employeeToPurge, setEmployeeToPurge]     = useState<Employee | null>(null);
-  const [showArchived, setShowArchived]           = useState(false);
+  useEffect(() => { fetchEmployees(); }, []);
+  useEffect(() => { if (tab === "archived") fetchArchived(); }, [tab]);
 
-  // Load data on mount and when toggling archived view
-  useEffect(() => {
-    if (showArchived) {
-      fetchArchivedEmployees();
+  const applyFilters = useCallback((overrides: Partial<typeof filters> = {}) => {
+    const merged = { ...filters, ...overrides };
+    setFilters(merged);
+    fetchEmployees(merged);
+  }, [filters, fetchEmployees]);
+
+  const handleEdit = (emp: Employee) => {
+    setEditEmp(emp);
+    setViewEmp(null);
+    setFormOpen(true);
+  };
+
+  const handleFormSubmit = async (data: Parameters<typeof createEmployee>[0]) => {
+    if (editEmp) {
+      await updateEmployee(editEmp.id, data);
+      toast({ title: "Employee updated" });
     } else {
-      fetchEmployees();
+      await createEmployee(data);
+      toast({ title: "Employee created" });
     }
-  }, [showArchived, fetchEmployees, fetchArchivedEmployees]);
-
-  // ─── Handlers ──────────────────────────────────────────────────────────────
-
-  const handleView = (employee: Employee) => {
-    setSelectedEmployee(employee);
-    setViewMode("view");
+    setFormOpen(false);
+    setEditEmp(null);
+    fetchEmployees(filters);
   };
 
-  const handleEdit = (employee: Employee) => {
-    setSelectedEmployee(employee);
-    setViewMode("edit");
+  const confirmArchive = async () => {
+    if (!archiveTarget) return;
+    await archiveEmployee(archiveTarget.id);
+    toast({ title: "Employee archived", description: `${archiveTarget.first_name} ${archiveTarget.last_name} has been archived.` });
+    setArchiveTarget(null);
+    fetchEmployees(filters);
   };
 
-  const handleDelete = (employee: Employee) => {
-    setEmployeeToDelete(employee);
-    setDeleteDialogOpen(true);
+  const confirmPurge = async () => {
+    if (!purgeTarget) return;
+    await purgeEmployee(purgeTarget.id);
+    toast({ title: "Employee permanently deleted" });
+    setPurgeTarget(null);
+    fetchArchived();
   };
-
-  const handlePurge = (employee: Employee) => {
-    setEmployeeToPurge(employee);
-    setPurgeDialogOpen(true);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (employeeToDelete) {
-      await deleteEmployee(employeeToDelete.id);
-      setDeleteDialogOpen(false);
-      setEmployeeToDelete(null);
-    }
-  };
-
-  const handleConfirmPurge = async () => {
-    if (employeeToPurge) {
-      await purgeEmployee(employeeToPurge.id);
-      setPurgeDialogOpen(false);
-      setEmployeeToPurge(null);
-    }
-  };
-
-  const handleAddEmployee = async (data: EmployeeFormData) => {
-    await addEmployee(data);
-    setViewMode("list");
-  };
-
-  const handleUpdateEmployee = async (data: EmployeeFormData) => {
-    if (selectedEmployee) {
-      await updateEmployee(selectedEmployee.id, data);
-      setViewMode("list");
-      setSelectedEmployee(null);
-    }
-  };
-
-  const handleCloseForm = () => {
-    setViewMode("list");
-    setSelectedEmployee(null);
-  };
-
-  // Fix: use deleted_at instead of archived boolean
-  const displayedEmployees = showArchived ? archivedEmployees : employees;
 
   return (
     <DashboardLayout>
-      {/* Page Header */}
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="font-display text-3xl font-semibold text-foreground">
-            Employee Directory
-          </h1>
-          <p className="mt-1 text-muted-foreground">
-            Manage all employee records and information
+          <h1 className="font-display text-3xl font-semibold text-foreground">Employees</h1>
+          <p className="text-muted-foreground mt-1">
+            {employees.length} active employee{employees.length !== 1 ? "s" : ""}
           </p>
         </div>
+        {/* NOTE: No "Add Employee" button — employees come from New Hire pipeline */}
       </div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className={`grid w-full ${isAdmin ? "grid-cols-2" : "grid-cols-1"}`}>
-          <TabsTrigger value="employees">Employees</TabsTrigger>
-          {isAdmin && <TabsTrigger value="new-hires">New Hires</TabsTrigger>}
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="directory">
+            Employee Directory
+            <Badge className="ml-2 text-xs bg-blue-100 text-blue-700 border-0">{employees.length}</Badge>
+          </TabsTrigger>
+          {isAdmin && (
+            <TabsTrigger value="new-hires">New Hires</TabsTrigger>
+          )}
+          {isAdmin && (
+            <TabsTrigger value="archived">
+              Archived
+              {archivedEmployees.length > 0 && (
+                <Badge className="ml-2 text-xs bg-red-100 text-red-700 border-0">{archivedEmployees.length}</Badge>
+              )}
+            </TabsTrigger>
+          )}
         </TabsList>
 
-        {/* Employees Tab */}
-        <TabsContent value="employees" className="space-y-6">
-          {/* Active / Archived Toggle */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <button
-                className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  !showArchived ? "bg-primary text-primary-foreground" : "bg-transparent text-muted-foreground"
-                }`}
-                onClick={() => setShowArchived(false)}
-              >
-                Active
-              </button>
-              <button
-                className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  showArchived ? "bg-primary text-primary-foreground" : "bg-transparent text-muted-foreground"
-                }`}
-                onClick={() => setShowArchived(true)}
-              >
-                Archived
-              </button>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {showArchived ? "Viewing archived employees" : `${employees.length} active employees`}
-            </p>
-          </div>
-
+        {/* ── Directory ──────────────────────────────────────────────────────── */}
+        <TabsContent value="directory" className="mt-6">
           <EmployeeTable
-            employees={displayedEmployees}
-            onView={handleView}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            isArchivedView={showArchived}
-            onRestore={async (emp) => await restoreEmployee(emp.id)}
-            onPurge={(emp) => handlePurge(emp)}
+            employees={employees}
+            isLoading={isLoading}
             isAdmin={isAdmin}
+            onView={setViewEmp}
+            onEdit={handleEdit}
+            onArchive={setArchiveTarget}
+            onSearch={s => applyFilters({ search: s })}
+            onFilter={status => applyFilters({ status })}
           />
         </TabsContent>
 
-        {/* New Hires Tab - Admin only */}
+        {/* ── New Hires (Admin only) ─────────────────────────────────────────── */}
         {isAdmin && (
-          <TabsContent value="new-hires">
+          <TabsContent value="new-hires" className="mt-6">
             <NewHireTab />
+          </TabsContent>
+        )}
+
+        {/* ── Archived (Admin only) ─────────────────────────────────────────── */}
+        {isAdmin && (
+          <TabsContent value="archived" className="mt-6">
+            {isLoading && archivedEmployees.length === 0 ? (
+              <div className="flex justify-center py-20">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : archivedEmployees.length === 0 ? (
+              <div className="text-center py-20 text-muted-foreground">No archived employees</div>
+            ) : (
+              <div className="rounded-xl border border-border bg-card overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/30 border-b border-border">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold">Employee</th>
+                      <th className="px-4 py-3 text-left font-semibold">Department</th>
+                      <th className="px-4 py-3 text-left font-semibold">Archived On</th>
+                      <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {archivedEmployees.map(emp => (
+                      <tr key={emp.id} className="hover:bg-muted/20">
+                        <td className="px-4 py-3">
+                          <p className="font-medium">{emp.first_name} {emp.last_name}</p>
+                          <p className="text-xs text-muted-foreground">{emp.email}</p>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">{emp.department}</td>
+                        <td className="px-4 py-3 text-muted-foreground text-xs">
+                          {emp.deleted_at ? new Date(emp.deleted_at).toLocaleDateString() : "—"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button variant="outline" size="sm" className="gap-1 text-green-700 border-green-200 hover:bg-green-50"
+                              onClick={() => restoreEmployee(emp.id).then(() => {
+                                toast({ title: "Employee restored" });
+                                fetchArchived(); fetchEmployees(filters);
+                              })}>
+                              <RotateCcw className="h-3.5 w-3.5" /> Restore
+                            </Button>
+                            <Button variant="outline" size="sm" className="gap-1 text-red-600 border-red-200 hover:bg-red-50"
+                              onClick={() => setPurgeTarget(emp)}>
+                              <Trash2 className="h-3.5 w-3.5" /> Delete
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </TabsContent>
         )}
       </Tabs>
 
-      {/* Add Employee Dialog */}
-      <Dialog open={viewMode === "add"} onOpenChange={(open) => !open && handleCloseForm()}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      {/* ── Employee Detail Sheet ─────────────────────────────────────────────── */}
+      <EmployeeDetails
+        employee={viewEmp}
+        open={!!viewEmp}
+        onClose={() => setViewEmp(null)}
+        onEdit={handleEdit}
+        onArchive={setArchiveTarget}
+        isAdmin={isAdmin}
+      />
+
+      {/* ── Edit/Create Dialog ────────────────────────────────────────────────── */}
+      <Dialog open={formOpen} onOpenChange={v => { setFormOpen(v); if (!v) setEditEmp(null); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="font-display text-xl">Add New Employee</DialogTitle>
+            <DialogTitle>{editEmp ? "Edit Employee" : "New Employee"}</DialogTitle>
           </DialogHeader>
-          <EmployeeForm onSubmit={handleAddEmployee} onCancel={handleCloseForm} isLoading={isLoading} />
+          <EmployeeForm
+            employee={editEmp}
+            onSubmit={handleFormSubmit}
+            onCancel={() => { setFormOpen(false); setEditEmp(null); }}
+            isAdmin={isAdmin}
+          />
         </DialogContent>
       </Dialog>
 
-      {/* Edit Employee Dialog */}
-      <Dialog open={viewMode === "edit"} onOpenChange={(open) => !open && handleCloseForm()}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-display text-xl">Edit Employee</DialogTitle>
-          </DialogHeader>
-          {selectedEmployee && (
-            <EmployeeForm employee={selectedEmployee} onSubmit={handleUpdateEmployee} onCancel={handleCloseForm} isLoading={isLoading} />
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* ── Archive Confirm ───────────────────────────────────────────────────── */}
+      <AlertDialog open={!!archiveTarget} onOpenChange={() => setArchiveTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive employee?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {archiveTarget?.first_name} {archiveTarget?.last_name} will be archived and removed from active lists.
+              You can restore them later from the Archived tab.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmArchive} className="bg-red-600 hover:bg-red-700">Archive</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-      {/* View Employee Sheet */}
-      <Sheet open={viewMode === "view"} onOpenChange={(open) => !open && handleCloseForm()}>
-        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
-          <SheetHeader className="sr-only">
-            <SheetTitle>Employee Details</SheetTitle>
-          </SheetHeader>
-          {selectedEmployee && (
-            <EmployeeDetails employee={selectedEmployee} onEdit={() => setViewMode("edit")} onClose={handleCloseForm} />
-          )}
-        </SheetContent>
-      </Sheet>
-
-      {/* Delete (soft) Dialog */}
-      <DeleteEmployeeDialog
-        employee={employeeToDelete}
-        open={deleteDialogOpen}
-        onOpenChange={setDeleteDialogOpen}
-        onConfirm={handleConfirmDelete}
-        isLoading={isLoading}
-        mode="soft"
-      />
-
-      {/* Purge (hard delete) Dialog */}
-      <DeleteEmployeeDialog
-        employee={employeeToPurge}
-        open={purgeDialogOpen}
-        onOpenChange={setPurgeDialogOpen}
-        onConfirm={handleConfirmPurge}
-        isLoading={isLoading}
-        mode="hard"
-      />
+      {/* ── Purge Confirm ─────────────────────────────────────────────────────── */}
+      <AlertDialog open={!!purgeTarget} onOpenChange={() => setPurgeTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently delete?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {purgeTarget?.first_name} {purgeTarget?.last_name} and cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmPurge} className="bg-red-600 hover:bg-red-700">Delete Forever</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }

@@ -1,463 +1,859 @@
-import { useState } from "react";
+// src/pages/Recruitment.tsx
+// REPLACE ENTIRE FILE
+
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { authFetch } from "@/hooks/api";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
-import {
-  Search,
-  Plus,
-  FileText,
-  Eye,
-  MoreHorizontal,
+  Search, Plus, Edit, Trash2, Calendar, UserCheck, UserX,
+  CheckCircle, XCircle, Loader2, Briefcase, Users, ClipboardList, GraduationCap,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-// ─── Mock Data ─────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-// Mock Job Postings
-const mockJobs = [
-  { id: 1, title: "Receptionist", department: "Front Office", slots: 8, posted_date: "2022-05-25", deadline: "2022-06-26", status: "open" },
-  { id: 2, title: "Concierge", department: "Rooms Division", slots: 11, posted_date: "2022-05-25", deadline: "2022-06-26", status: "open" },
-  { id: 3, title: "Housekeeper", department: "Housekeeping", slots: 5, posted_date: "2022-05-25", deadline: "2022-06-26", status: "open" },
-  { id: 4, title: "Bartender", department: "Foods & Beverages", slots: 3, posted_date: "2022-05-25", deadline: "2022-06-26", status: "open" },
-  { id: 5, title: "Room Attendant", department: "Housekeeping", slots: 10, posted_date: "2022-05-25", deadline: "2022-06-26", status: "open" },
-  { id: 6, title: "Accountant", department: "Finance", slots: 3, posted_date: "2022-04-24", deadline: "2022-05-25", status: "open" },
+interface JobPosting {
+  id: number;
+  title: string;
+  department: string;
+  job_category: string;
+  description: string;
+  slots: number;
+  posted_date?: string;
+  deadline?: string;
+  status: "open" | "closed";
+  created_by: number;
+  applicants_count?: number;
+  hired_count?: number;
+  created_at: string;
+}
+
+interface Applicant {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  resume_path: string | null;
+  job_posting_id: number;
+  pipeline_stage: "applied" | "reviewed" | "interview_scheduled" | "interviewed" | "hired" | "rejected";
+  notes: string | null;
+  hired_at: string | null;
+  job_posting?: JobPosting;
+  created_at: string;
+}
+
+interface Interview {
+  id: number;
+  applicant_id: number;
+  interviewer_id: number;
+  scheduled_at: string;
+  status: "scheduled" | "completed" | "cancelled";
+  feedback: string | null;
+  applicant?: Applicant;
+  interviewer?: { id: number; name: string; email: string };
+  created_at: string;
+}
+
+interface TrainingAssignment {
+  id: number;
+  training_id: number;
+  applicant_id: number;
+  trainer_id: number | null;
+  status: "pending" | "in_progress" | "completed";
+  completed_at: string | null;
+  training?: { id: number; title: string; description: string };
+  applicant?: Applicant;
+  trainer?: { id: number; first_name: string; last_name: string; department: string };
+}
+
+interface NewHire {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  department: string | null;
+  job_category: string | null;
+  start_date: string | null;
+  status: string;
+  applicant_id?: number;
+}
+
+interface HRUser {
+  id: number;
+  name: string;
+  email: string;
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const DEPARTMENTS = [
+  "Front Office", "Housekeeping", "Food & Beverage",
+  "Maintenance", "Administration", "Security", "Sales & Marketing",
 ];
 
-// Mock Applicants
-const mockApplicants = [
-  { id: 1, first_name: "Jonathan", last_name: "Dy", position: "Receptionist", application_date: "2022-05-25", resume_url: "/resume1.pdf", status: "approved" },
-  { id: 2, first_name: "Jay", last_name: "Cruz", position: "Concierge", application_date: "2022-05-25", resume_url: "/resume2.pdf", status: "approved" },
-  { id: 3, first_name: "Sam", last_name: "Yap", position: "Housekeeper", application_date: "2022-05-25", resume_url: "/resume3.pdf", status: "approved" },
-  { id: 4, first_name: "Sunny", last_name: "Din", position: "Bartender", application_date: "2022-05-25", resume_url: "/resume4.pdf", status: "pending" },
-  { id: 5, first_name: "Brenda", last_name: "Smith", position: "Room Attendant", application_date: "2022-05-25", resume_url: "/resume5.pdf", status: "pending" },
-  { id: 6, first_name: "Piolo", last_name: "Papi", position: "Bartender", application_date: "2022-05-20", resume_url: "/resume6.pdf", status: "interview" },
-  { id: 7, first_name: "Squidward", last_name: "Ry", position: "Room Attendant", application_date: "2022-05-18", resume_url: "/resume7.pdf", status: "pending" },
-  { id: 8, first_name: "Heidi", last_name: "Rose", position: "Accountant", application_date: "2022-05-15", resume_url: "/resume8.pdf", status: "pending" },
-];
+const JOB_CATEGORIES: Record<string, string[]> = {
+  "Front Office":    ["Front Desk Agent","Concierge","Reservations Agent","Guest Relations Officer","Bell Staff"],
+  "Housekeeping":    ["Room Attendant","Laundry Attendant","Housekeeping Supervisor","Public Area Cleaner"],
+  "Food & Beverage": ["Waiter/Waitress","Bartender","Chef de Partie","Sous Chef","Executive Chef","Kitchen Steward"],
+  "Maintenance":     ["Maintenance Technician","Electrician","Plumber","Maintenance Supervisor"],
+  "Administration":  ["HR Officer","Accounting Staff","Payroll Officer","General Manager","Department Manager","Supervisor"],
+  "Security":        ["Security Guard","Security Supervisor"],
+  "Sales & Marketing": ["Sales Manager","Marketing Officer","Reservations Manager"],
+};
 
-// Mock Interviews
-const mockInterviews = [
-  { id: 1, applicant_id: 1, applicant_name: "Jonathan Dy", position: "Receptionist", scheduled_date: "2022-05-04", time: "10:00 AM", interviewer_name: "Dranreb Jay", status: "scheduled" },
-  { id: 2, applicant_id: 2, applicant_name: "Jay Cruz", position: "Concierge", scheduled_date: "2022-05-04", time: "12:00 PM", interviewer_name: "Gwen Li", status: "scheduled" },
-  { id: 3, applicant_id: 3, applicant_name: "Sam Yap", position: "Housekeeper", scheduled_date: "2022-06-04", time: "3:30 PM", interviewer_name: "Gwen Li", status: "scheduled" },
-  { id: 4, applicant_id: 6, applicant_name: "Piolo Papi", position: "Bartender", scheduled_date: null, time: null, interviewer_name: null, status: "pending" },
-  { id: 5, applicant_id: 7, applicant_name: "Squidward Ry", position: "Room Attendant", scheduled_date: null, time: null, interviewer_name: null, status: "pending" },
-  { id: 6, applicant_id: 8, applicant_name: "Heidi Rose", position: "Accountant", scheduled_date: null, time: null, interviewer_name: null, status: "pending" },
-];
+const STAGE_STYLES: Record<string, string> = {
+  applied:              "bg-gray-100 text-gray-700",
+  reviewed:             "bg-blue-100 text-blue-700",
+  interview_scheduled:  "bg-purple-100 text-purple-700",
+  interviewed:          "bg-cyan-100 text-cyan-700",
+  hired:                "bg-green-100 text-green-700",
+  rejected:             "bg-red-100 text-red-700",
+};
 
-// Mock Training Programs
-const mockTrainingPrograms = [
-  { id: 1, name: "Reception Training", participants: 10, start_date: "2022-05-14", end_date: "2022-05-24", status: "in_progress" },
-  { id: 2, name: "Housekeeping Training", participants: 8, start_date: "2022-05-14", end_date: "2022-05-24", status: "in_progress" },
-  { id: 3, name: "Marketing Training", participants: 9, start_date: "2022-06-04", end_date: "2022-06-14", status: "in_progress" },
-  { id: 4, name: "Customer Service", participants: 11, start_date: "2022-05-04", end_date: "2022-05-14", status: "completed" },
-  { id: 5, name: "Safety Procedures", participants: 7, start_date: "2022-05-04", end_date: "2022-05-14", status: "completed" },
-];
+const STAGE_LABELS: Record<string, string> = {
+  applied:             "Applied",
+  reviewed:            "Reviewed",
+  interview_scheduled: "Interview Scheduled",
+  interviewed:         "Interviewed",
+  hired:               "Hired",
+  rejected:            "Rejected",
+};
 
-// ─── Job Vacancies Tab ───────────────────────────────────────────────────────
+// ─── API helper ───────────────────────────────────────────────────────────────
 
-function JobVacanciesTab() {
-  const [searchTerm, setSearchTerm] = useState("");
+async function api<T>(url: string, options?: RequestInit): Promise<T> {
+  const res  = await authFetch(url, options);
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.message ?? "Request failed");
+  return body.data as T;
+}
 
-  const filteredJobs = mockJobs.filter((job) =>
-    job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    job.department.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+const safeFetch = async <T>(url: string): Promise<T[]> => {
+  try {
+    const res  = await authFetch(url);
+    const body = await res.json();
+    const data = body.data;
+    return Array.isArray(data) ? data : (data?.data ?? []);
+  } catch { return []; }
+};
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "open":
-        return <Badge className="bg-green-100 text-green-700">Open</Badge>;
-      case "closed":
-        return <Badge className="bg-red-100 text-red-700">Closed</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
+// ═══════════════════════════════════════════════════════════════════════
+// TAB 1 — JOB VACANCIES
+// ═══════════════════════════════════════════════════════════════════════
+
+function JobVacanciesTab({ canManage }: { canManage: boolean }) {
+  const { toast }                 = useToast();
+  const [jobs, setJobs]           = useState<JobPosting[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [search, setSearch]       = useState("");
+  const [open, setOpen]           = useState(false);
+  const [editing, setEditing]     = useState<JobPosting | null>(null);
+  const [saving, setSaving]       = useState(false);
+  const [dept, setDept]           = useState("");
+  const [form, setForm] = useState({
+    title: "", department: "", job_category: "",
+    description: "", slots: "1", deadline: "",
+  });
+
+  const load = async () => {
+    setLoading(true);
+    setJobs(await safeFetch("/api/recruitment/job-postings"));
+    setLoading(false);
   };
+
+  useEffect(() => { load(); }, []);
+
+  const openCreate = () => {
+    setEditing(null);
+    setDept("");
+    setForm({ title: "", department: "", job_category: "", description: "", slots: "1", deadline: "" });
+    setOpen(true);
+  };
+
+  const openEdit = (job: JobPosting) => {
+    setEditing(job);
+    setDept(job.department);
+    setForm({
+      title: job.title, department: job.department,
+      job_category: job.job_category, description: job.description,
+      slots: String(job.slots), deadline: job.deadline ?? "",
+    });
+    setOpen(true);
+  };
+
+  const save = async () => {
+    if (!form.title || !form.department || !form.job_category) {
+      toast({ title: "Required fields missing", variant: "destructive" }); return;
+    }
+    setSaving(true);
+    try {
+      const body = { ...form, slots: parseInt(form.slots) };
+      if (editing) {
+        await api(`/api/recruitment/job-postings/${editing.id}`, { method: "PUT", body: JSON.stringify(body) });
+      } else {
+        await api("/api/recruitment/job-postings", { method: "POST", body: JSON.stringify(body) });
+      }
+      toast({ title: editing ? "Job updated" : "Job posted" });
+      setOpen(false); load();
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" });
+    } finally { setSaving(false); }
+  };
+
+  const del = async (id: number) => {
+    if (!confirm("Delete this job posting?")) return;
+    try {
+      await api(`/api/recruitment/job-postings/${id}`, { method: "DELETE" });
+      toast({ title: "Deleted" }); load();
+    } catch { toast({ title: "Failed to delete", variant: "destructive" }); }
+  };
+
+  const toggleStatus = async (job: JobPosting) => {
+    try {
+      await api(`/api/recruitment/job-postings/${job.id}`, {
+        method: "PUT", body: JSON.stringify({ status: job.status === "open" ? "closed" : "open" }),
+      });
+      load();
+    } catch { toast({ title: "Failed", variant: "destructive" }); }
+  };
+
+  const filtered = jobs.filter(j =>
+    j.title.toLowerCase().includes(search.toLowerCase()) ||
+    j.department.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="relative w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Search job title or department..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9"
-          />
+      <div className="flex items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Search jobs..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <Button className="bg-blue-600 hover:bg-blue-700">
-          <Plus className="h-4 w-4 mr-2" />
-          Job Vacancy
-        </Button>
+        {canManage && (
+          <Button onClick={openCreate} className="gap-2">
+            <Plus className="h-4 w-4" /> New Job Posting
+          </Button>
+        )}
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-        <Table>
-          <TableHeader className="bg-gray-50">
-            <TableRow>
-              <TableHead className="font-semibold">Job Title</TableHead>
-              <TableHead className="font-semibold">Department</TableHead>
-              <TableHead className="font-semibold text-center">Slots</TableHead>
-              <TableHead className="font-semibold">Posting Date</TableHead>
-              <TableHead className="font-semibold">Deadline</TableHead>
-              <TableHead className="font-semibold text-center">Status</TableHead>
-              <TableHead className="font-semibold text-center">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredJobs.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                  No job vacancies found
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredJobs.map((job) => (
-                <TableRow key={job.id} className="hover:bg-gray-50">
-                  <TableCell className="font-medium text-blue-600">{job.title}</TableCell>
-                  <TableCell>{job.department}</TableCell>
-                  <TableCell className="text-center">{job.slots}</TableCell>
-                  <TableCell>{new Date(job.posted_date).toLocaleDateString()}</TableCell>
-                  <TableCell>{new Date(job.deadline).toLocaleDateString()}</TableCell>
-                  <TableCell className="text-center">{getStatusBadge(job.status)}</TableCell>
-                  <TableCell className="text-center">
-                    <Button variant="ghost" size="sm">
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      {loading ? (
+        <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16">
+          <Briefcase className="h-10 w-10 text-muted-foreground/40 mb-3" />
+          <p className="text-muted-foreground font-medium">No job postings yet</p>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/30 border-b border-border">
+              <tr>
+                <th className="px-4 py-3 text-left font-semibold">Job Title</th>
+                <th className="px-4 py-3 text-left font-semibold">Department</th>
+                <th className="px-4 py-3 text-left font-semibold">Category</th>
+                <th className="px-4 py-3 text-center font-semibold">Slots</th>
+                <th className="px-4 py-3 text-center font-semibold">Applicants</th>
+                <th className="px-4 py-3 text-center font-semibold">Status</th>
+                <th className="px-4 py-3 text-right font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {filtered.map(job => (
+                <tr key={job.id} className="hover:bg-muted/20 transition-colors">
+                  <td className="px-4 py-3 font-medium">{job.title}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{job.department}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{job.job_category}</td>
+                  <td className="px-4 py-3 text-center">{job.slots}</td>
+                  <td className="px-4 py-3 text-center">{job.applicants_count ?? 0}</td>
+                  <td className="px-4 py-3 text-center">
+                    <Badge className={cn("text-xs border-0", job.status === "open" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700")}>
+                      {job.status}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      {canManage && (
+                        <>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => openEdit(job)}><Edit className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => toggleStatus(job)}>
+                            {job.status === "open" ? <XCircle className="h-4 w-4 text-red-500" /> : <CheckCircle className="h-4 w-4 text-green-500" />}
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500" onClick={() => del(job.id)}><Trash2 className="h-4 w-4" /></Button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      <div className="text-sm text-gray-500">
-        Showing {filteredJobs.length} of {mockJobs.length} Job Vacancies
-      </div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>{editing ? "Edit Job Posting" : "New Job Posting"}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Input placeholder="Job Title *" value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} />
+            <Select value={form.department} onValueChange={v => { setDept(v); setForm(p => ({ ...p, department: v, job_category: "" })); }}>
+              <SelectTrigger><SelectValue placeholder="Select Department *" /></SelectTrigger>
+              <SelectContent>{DEPARTMENTS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={form.job_category} onValueChange={v => setForm(p => ({ ...p, job_category: v }))} disabled={!dept}>
+              <SelectTrigger><SelectValue placeholder={dept ? "Select Job Category *" : "Select department first"} /></SelectTrigger>
+              <SelectContent>{(JOB_CATEGORIES[dept] ?? []).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+            </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <Input type="number" placeholder="Slots" min="1" value={form.slots} onChange={e => setForm(p => ({ ...p, slots: e.target.value }))} />
+              <Input type="date" value={form.deadline} onChange={e => setForm(p => ({ ...p, deadline: e.target.value }))} />
+            </div>
+            <textarea className="w-full rounded-md border border-input px-3 py-2 text-sm min-h-[80px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" placeholder="Job Description" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={save} disabled={saving}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {editing ? "Save Changes" : "Post Job"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-// ─── Applicant Management Tab ─────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// TAB 2 — APPLICANT MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════
 
-function ApplicantManagementTab() {
-  const [searchTerm, setSearchTerm] = useState("");
+function ApplicantManagementTab({ canManage }: { canManage: boolean }) {
+  const { toast }                       = useToast();
+  const [applicants, setApplicants]     = useState<Applicant[]>([]);
+  const [jobs, setJobs]                 = useState<JobPosting[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [search, setSearch]             = useState("");
+  const [addOpen, setAddOpen]           = useState(false);
+  const [schedOpen, setSchedOpen]       = useState(false);
+  const [selApp, setSelApp]             = useState<Applicant | null>(null);
+  const [hrUsers, setHrUsers]           = useState<HRUser[]>([]);
+  const [acting, setActing]             = useState<number | null>(null);
+  const [saving, setSaving]             = useState(false);
 
-  const filteredApplicants = mockApplicants.filter((app) =>
-    (app.first_name + " " + app.last_name).toLowerCase().includes(searchTerm.toLowerCase()) ||
-    app.position.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const [addForm, setAddForm] = useState({ first_name: "", last_name: "", email: "", phone: "", job_posting_id: "" });
+  const [schedForm, setSchedForm] = useState({ interviewer_id: "", scheduled_at: "" });
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "approved":
-        return <Badge className="bg-green-100 text-green-700">Approved</Badge>;
-      case "pending":
-        return <Badge className="bg-yellow-100 text-yellow-700">Pending</Badge>;
-      case "rejected":
-        return <Badge className="bg-red-100 text-red-700">Rejected</Badge>;
-      case "interview":
-        return <Badge className="bg-blue-100 text-blue-700">Interview</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
+  const load = async () => {
+    setLoading(true);
+    const [apps, jbs] = await Promise.all([
+      safeFetch<Applicant>("/api/recruitment/applicants"),
+      safeFetch<JobPosting>("/api/recruitment/job-postings"),
+    ]);
+    setApplicants(apps); setJobs(jbs);
+    // Fetch HR users for interview scheduling
+    try {
+      const res = await authFetch("/api/employees?role=HR");
+      const body = await res.json();
+      const data = body.data?.data ?? body.data ?? [];
+      setHrUsers(Array.isArray(data) ? data.map((e: { id: number; first_name: string; last_name: string; email: string }) => ({ id: e.id, name: `${e.first_name} ${e.last_name}`, email: e.email })) : []);
+    } catch { setHrUsers([]); }
+    setLoading(false);
   };
+
+  useEffect(() => { load(); }, []);
+
+  const addApplicant = async () => {
+    if (!addForm.first_name || !addForm.last_name || !addForm.email || !addForm.job_posting_id) {
+      toast({ title: "Fill required fields", variant: "destructive" }); return;
+    }
+    setSaving(true);
+    try {
+      const fd = new FormData();
+      Object.entries(addForm).forEach(([k, v]) => fd.append(k, v));
+      if (resumeFile) fd.append("resume", resumeFile);
+      const res = await authFetch("/api/recruitment/applicants", { method: "POST", body: fd });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message ?? "Failed");
+      toast({ title: "Applicant added" });
+      setAddOpen(false);
+      setAddForm({ first_name: "", last_name: "", email: "", phone: "", job_posting_id: "" });
+      setResumeFile(null);
+      load();
+    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
+    finally { setSaving(false); }
+  };
+
+  const scheduleInterview = async () => {
+    if (!selApp || !schedForm.interviewer_id || !schedForm.scheduled_at) {
+      toast({ title: "Fill all fields", variant: "destructive" }); return;
+    }
+    setSaving(true);
+    try {
+      await api("/api/recruitment/interviews", {
+        method: "POST",
+        body: JSON.stringify({ applicant_id: selApp.id, ...schedForm }),
+      });
+      toast({ title: "Interview scheduled" });
+      setSchedOpen(false); setSelApp(null);
+      setSchedForm({ interviewer_id: "", scheduled_at: "" });
+      load();
+    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
+    finally { setSaving(false); }
+  };
+
+  const hireApplicant = async (app: Applicant) => {
+    setActing(app.id);
+    try {
+      await api(`/api/applicants/${app.id}/hire`, { method: "POST" });
+      toast({ title: "Applicant hired!", description: "Training record created. Check the Training tab." });
+      load();
+    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
+    finally { setActing(null); }
+  };
+
+  const rejectApplicant = async (app: Applicant) => {
+    setActing(app.id);
+    try {
+      await api(`/api/applicants/${app.id}/reject`, { method: "POST" });
+      toast({ title: "Applicant rejected" });
+      load();
+    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
+    finally { setActing(null); }
+  };
+
+  const updateStage = async (app: Applicant, stage: string) => {
+    setActing(app.id);
+    try {
+      await api(`/api/recruitment/applicants/${app.id}/stage`, {
+        method: "PATCH", body: JSON.stringify({ pipeline_stage: stage }),
+      });
+      load();
+    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
+    finally { setActing(null); }
+  };
+
+  const filtered = applicants.filter(a =>
+    `${a.first_name} ${a.last_name}`.toLowerCase().includes(search.toLowerCase()) ||
+    a.email.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="relative w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Search applicant name or position..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9"
-          />
+      <div className="flex items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Search applicants..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <Button className="bg-blue-600 hover:bg-blue-700">
-          <Plus className="h-4 w-4 mr-2" />
-          + Applicant
-        </Button>
+        {canManage && (
+          <Button onClick={() => setAddOpen(true)} className="gap-2">
+            <Plus className="h-4 w-4" /> Add Applicant
+          </Button>
+        )}
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-        <Table>
-          <TableHeader className="bg-gray-50">
-            <TableRow>
-              <TableHead className="font-semibold">Applicant Name</TableHead>
-              <TableHead className="font-semibold">Position</TableHead>
-              <TableHead className="font-semibold">Application Date</TableHead>
-              <TableHead className="font-semibold">Resume</TableHead>
-              <TableHead className="font-semibold text-center">Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredApplicants.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center py-8">No applicants found</TableCell>
-              </TableRow>
-            ) : (
-              filteredApplicants.map((applicant) => (
-                <TableRow key={applicant.id}>
-                  <TableCell className="font-medium">
-                    {applicant.first_name} {applicant.last_name}
-                  </TableCell>
-                  <TableCell>{applicant.position}</TableCell>
-                  <TableCell>{new Date(applicant.application_date).toLocaleDateString()}</TableCell>
-                  <TableCell>
-                    <Button variant="link" className="h-auto p-0 text-blue-600">
-                      <FileText className="h-4 w-4 mr-1" />
-                      View
-                    </Button>
-                  </TableCell>
-                  <TableCell className="text-center">{getStatusBadge(applicant.status)}</TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      {loading ? (
+        <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16">
+          <Users className="h-10 w-10 text-muted-foreground/40 mb-3" />
+          <p className="text-muted-foreground font-medium">No applicants yet</p>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/30 border-b border-border">
+              <tr>
+                <th className="px-4 py-3 text-left font-semibold">Applicant</th>
+                <th className="px-4 py-3 text-left font-semibold">Applied For</th>
+                <th className="px-4 py-3 text-left font-semibold">Stage</th>
+                <th className="px-4 py-3 text-right font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {filtered.map(app => (
+                <tr key={app.id} className="hover:bg-muted/20 transition-colors">
+                  <td className="px-4 py-3">
+                    <p className="font-medium">{app.first_name} {app.last_name}</p>
+                    <p className="text-xs text-muted-foreground">{app.email}</p>
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs">
+                    {app.job_posting?.title ?? "—"}<br />
+                    <span className="text-muted-foreground/60">{app.job_posting?.department}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge className={cn("text-xs border-0", STAGE_STYLES[app.pipeline_stage])}>
+                      {STAGE_LABELS[app.pipeline_stage]}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1 flex-wrap">
+                      {acting === app.id && <Loader2 className="h-4 w-4 animate-spin" />}
+                      {acting !== app.id && app.pipeline_stage === "applied" && (
+                        <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => updateStage(app, "reviewed")}>Mark Reviewed</Button>
+                      )}
+                      {acting !== app.id && app.pipeline_stage === "reviewed" && (
+                        <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => { setSelApp(app); setSchedOpen(true); }}>
+                          <Calendar className="h-3 w-3 mr-1" /> Schedule Interview
+                        </Button>
+                      )}
+                      {acting !== app.id && app.pipeline_stage === "interview_scheduled" && (
+                        <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => updateStage(app, "interviewed")}>Mark Interviewed</Button>
+                      )}
+                      {acting !== app.id && app.pipeline_stage === "interviewed" && (
+                        <>
+                          <Button size="sm" className="text-xs h-7 bg-green-600 hover:bg-green-700" onClick={() => hireApplicant(app)}>
+                            <UserCheck className="h-3 w-3 mr-1" /> Hire
+                          </Button>
+                          <Button size="sm" variant="destructive" className="text-xs h-7" onClick={() => rejectApplicant(app)}>
+                            <UserX className="h-3 w-3 mr-1" /> Reject
+                          </Button>
+                        </>
+                      )}
+                      {(app.pipeline_stage === "hired" || app.pipeline_stage === "rejected") && (
+                        <span className="text-xs text-muted-foreground capitalize">{app.pipeline_stage}</span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      <div className="text-sm text-gray-500">
-        Showing {filteredApplicants.length} of {mockApplicants.length} Applicants
-      </div>
+      {/* Add Applicant Dialog */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Add Applicant</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <Input placeholder="First Name *" value={addForm.first_name} onChange={e => setAddForm(p => ({ ...p, first_name: e.target.value }))} />
+              <Input placeholder="Last Name *" value={addForm.last_name} onChange={e => setAddForm(p => ({ ...p, last_name: e.target.value }))} />
+            </div>
+            <Input type="email" placeholder="Email *" value={addForm.email} onChange={e => setAddForm(p => ({ ...p, email: e.target.value }))} />
+            <Input placeholder="Phone" value={addForm.phone} onChange={e => setAddForm(p => ({ ...p, phone: e.target.value }))} />
+            <Select value={addForm.job_posting_id} onValueChange={v => setAddForm(p => ({ ...p, job_posting_id: v }))}>
+              <SelectTrigger><SelectValue placeholder="Select Job Posting *" /></SelectTrigger>
+              <SelectContent>
+                {jobs.filter(j => j.status === "open").map(j => (
+                  <SelectItem key={j.id} value={String(j.id)}>{j.title} — {j.department}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div>
+              <label className="text-xs text-muted-foreground">Resume (PDF/DOC, optional)</label>
+              <Input type="file" accept=".pdf,.doc,.docx" className="mt-1" onChange={e => setResumeFile(e.target.files?.[0] ?? null)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button onClick={addApplicant} disabled={saving}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Schedule Interview Dialog */}
+      <Dialog open={schedOpen} onOpenChange={setSchedOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Schedule Interview</DialogTitle>
+            {selApp && <p className="text-sm text-muted-foreground">{selApp.first_name} {selApp.last_name}</p>}
+          </DialogHeader>
+          <div className="space-y-3">
+            <Select value={schedForm.interviewer_id} onValueChange={v => setSchedForm(p => ({ ...p, interviewer_id: v }))}>
+              <SelectTrigger><SelectValue placeholder="Select Interviewer" /></SelectTrigger>
+              <SelectContent>
+                {hrUsers.length === 0
+                  ? <SelectItem value="0" disabled>No HR users found</SelectItem>
+                  : hrUsers.map(u => <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Input type="datetime-local" value={schedForm.scheduled_at} onChange={e => setSchedForm(p => ({ ...p, scheduled_at: e.target.value }))} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSchedOpen(false)}>Cancel</Button>
+            <Button onClick={scheduleInterview} disabled={saving}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Schedule
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-// ─── Scheduled Interviews Tab ─────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// TAB 3 — SCHEDULED INTERVIEWS
+// ═══════════════════════════════════════════════════════════════════════
 
 function ScheduledInterviewsTab() {
-  const [searchTerm, setSearchTerm] = useState("");
+  const { toast }                       = useToast();
+  const [interviews, setInterviews]     = useState<Interview[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [completing, setCompleting]     = useState<number | null>(null);
 
-  const filteredInterviews = mockInterviews.filter((interview) =>
-    interview.applicant_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    interview.position.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const load = async () => {
+    setLoading(true);
+    setInterviews(await safeFetch("/api/recruitment/interviews"));
+    setLoading(false);
+  };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "scheduled":
-        return <Badge className="bg-blue-100 text-blue-700">Scheduled</Badge>;
-      case "completed":
-        return <Badge className="bg-green-100 text-green-700">Completed</Badge>;
-      case "cancelled":
-        return <Badge className="bg-red-100 text-red-700">Cancelled</Badge>;
-      case "pending":
-        return <Badge className="bg-yellow-100 text-yellow-700">Pending</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
+  useEffect(() => { load(); }, []);
+
+  const complete = async (id: number) => {
+    setCompleting(id);
+    try {
+      await api(`/api/interviews/${id}/complete`, { method: "POST" });
+      toast({ title: "Interview completed" }); load();
+    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
+    finally { setCompleting(null); }
+  };
+
+  const statusStyles: Record<string, string> = {
+    scheduled:  "bg-blue-100 text-blue-700",
+    completed:  "bg-green-100 text-green-700",
+    cancelled:  "bg-red-100 text-red-700",
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="relative w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Search interviews..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9"
-          />
+      {loading ? (
+        <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+      ) : interviews.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16">
+          <Calendar className="h-10 w-10 text-muted-foreground/40 mb-3" />
+          <p className="text-muted-foreground font-medium">No interviews scheduled</p>
+          <p className="text-sm text-muted-foreground mt-1">Schedule interviews from the Applicant Management tab</p>
         </div>
-        <Button className="bg-blue-600 hover:bg-blue-700">
-          <Plus className="h-4 w-4 mr-2" />
-          Schedule Interview
-        </Button>
-      </div>
-
-      <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-        <Table>
-          <TableHeader className="bg-gray-50">
-            <TableRow>
-              <TableHead className="font-semibold">Applicant</TableHead>
-              <TableHead className="font-semibold">Position</TableHead>
-              <TableHead className="font-semibold">Date & Time</TableHead>
-              <TableHead className="font-semibold">Interviewer</TableHead>
-              <TableHead className="font-semibold text-center">Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredInterviews.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center py-8">No interviews scheduled</TableCell>
-              </TableRow>
-            ) : (
-              filteredInterviews.map((interview) => (
-                <TableRow key={interview.id}>
-                  <TableCell className="font-medium">{interview.applicant_name}</TableCell>
-                  <TableCell>{interview.position}</TableCell>
-                  <TableCell>
-                    {interview.scheduled_date ? (
-                      <>
-                        {new Date(interview.scheduled_date).toLocaleDateString()} - {interview.time}
-                      </>
-                    ) : "---"}
-                  </TableCell>
-                  <TableCell>{interview.interviewer_name || "---"}</TableCell>
-                  <TableCell className="text-center">{getStatusBadge(interview.status)}</TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      <div className="text-sm text-gray-500">
-        Showing {filteredInterviews.length} of {mockInterviews.length} Applicants
-      </div>
+      ) : (
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/30 border-b border-border">
+              <tr>
+                <th className="px-4 py-3 text-left font-semibold">Applicant</th>
+                <th className="px-4 py-3 text-left font-semibold">Position</th>
+                <th className="px-4 py-3 text-left font-semibold">Date & Time</th>
+                <th className="px-4 py-3 text-left font-semibold">Interviewer</th>
+                <th className="px-4 py-3 text-left font-semibold">Status</th>
+                <th className="px-4 py-3 text-right font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {interviews.map(iv => (
+                <tr key={iv.id} className="hover:bg-muted/20 transition-colors">
+                  <td className="px-4 py-3 font-medium">{iv.applicant?.first_name} {iv.applicant?.last_name}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{iv.applicant?.job_posting?.title ?? "—"}</td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {iv.scheduled_at ? new Date(iv.scheduled_at).toLocaleString("en-PH", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground">{iv.interviewer?.name ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    <Badge className={cn("text-xs border-0", statusStyles[iv.status])}>{iv.status}</Badge>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {iv.status === "scheduled" && (
+                      <Button size="sm" variant="outline" className="text-xs h-7 gap-1"
+                        disabled={completing === iv.id}
+                        onClick={() => complete(iv.id)}>
+                        {completing === iv.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
+                        Complete
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
 
-// ─── Training Programs Tab ────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// TAB 4 — TRAINING PROGRAMS
+// ═══════════════════════════════════════════════════════════════════════
 
-function TrainingProgramsTab() {
-  const [searchTerm, setSearchTerm] = useState("");
+function TrainingProgramsTab({ canManage }: { canManage: boolean }) {
+  const { toast }                             = useToast();
+  const [assignments, setAssignments]         = useState<TrainingAssignment[]>([]);
+  const [employees, setEmployees]             = useState<{ id: number; first_name: string; last_name: string; department: string }[]>([]);
+  const [loading, setLoading]                 = useState(true);
+  const [trainerOpen, setTrainerOpen]         = useState(false);
+  const [selAssignment, setSelAssignment]     = useState<TrainingAssignment | null>(null);
+  const [trainerId, setTrainerId]             = useState("");
+  const [saving, setSaving]                   = useState(false);
+  const [completing, setCompleting]           = useState<number | null>(null);
 
-  const filteredPrograms = mockTrainingPrograms.filter((program) =>
-    program.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "in_progress":
-        return <Badge className="bg-blue-100 text-blue-700">In Progress</Badge>;
-      case "completed":
-        return <Badge className="bg-green-100 text-green-700">Completed</Badge>;
-      case "upcoming":
-        return <Badge className="bg-yellow-100 text-yellow-700">Upcoming</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
+  const load = async () => {
+    setLoading(true);
+    const [assgn, emps] = await Promise.all([
+      safeFetch<TrainingAssignment>("/api/recruitment/training-assignments"),
+      safeFetch<{ id: number; first_name: string; last_name: string; department: string }>("/api/employees"),
+    ]);
+    setAssignments(assgn); setEmployees(emps);
+    setLoading(false);
   };
+
+  useEffect(() => { load(); }, []);
+
+  const assignTrainer = async () => {
+    if (!selAssignment || !trainerId) return;
+    setSaving(true);
+    try {
+      await api(`/api/recruitment/training-assignments/${selAssignment.id}/assign-trainer`, {
+        method: "POST", body: JSON.stringify({ trainer_id: trainerId }),
+      });
+      toast({ title: "Trainer assigned" }); setTrainerOpen(false); load();
+    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
+    finally { setSaving(false); }
+  };
+
+  const completeTraining = async (id: number) => {
+    setCompleting(id);
+    try {
+      await api(`/api/recruitment/training-assignments/${id}/complete`, { method: "POST" });
+      toast({ title: "Training completed!", description: "New hire record created. Check Employees → New Hires." });
+      load();
+    } catch (err) { toast({ title: err instanceof Error ? err.message : "Failed", variant: "destructive" }); }
+    finally { setCompleting(null); }
+  };
+
+  const statusColors = { pending: "bg-yellow-100 text-yellow-700", in_progress: "bg-blue-100 text-blue-700", completed: "bg-green-100 text-green-700" };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="relative w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Search training programs..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9"
-          />
+      {loading ? (
+        <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+      ) : assignments.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16">
+          <GraduationCap className="h-10 w-10 text-muted-foreground/40 mb-3" />
+          <p className="text-muted-foreground font-medium">No training records yet</p>
+          <p className="text-sm text-muted-foreground mt-1">Training is auto-created when an applicant is hired</p>
         </div>
-        <Button className="bg-blue-600 hover:bg-blue-700">
-          <Plus className="h-4 w-4 mr-2" />
-          Program
-        </Button>
-      </div>
+      ) : (
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/30 border-b border-border">
+              <tr>
+                <th className="px-4 py-3 text-left font-semibold">Training</th>
+                <th className="px-4 py-3 text-left font-semibold">New Hire</th>
+                <th className="px-4 py-3 text-left font-semibold">Trainer</th>
+                <th className="px-4 py-3 text-left font-semibold">Status</th>
+                <th className="px-4 py-3 text-right font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {assignments.map(a => (
+                <tr key={a.id} className="hover:bg-muted/20 transition-colors">
+                  <td className="px-4 py-3 font-medium">{a.training?.title ?? "—"}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{a.applicant?.first_name} {a.applicant?.last_name}</td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {a.trainer ? `${a.trainer.first_name} ${a.trainer.last_name}` : <span className="text-orange-500 text-xs">Not assigned</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge className={cn("text-xs border-0", statusColors[a.status])}>{a.status.replace("_", " ")}</Badge>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      {a.status === "pending" && canManage && (
+                        <Button size="sm" variant="outline" className="text-xs h-7 gap-1"
+                          onClick={() => { setSelAssignment(a); setTrainerId(""); setTrainerOpen(true); }}>
+                          <UserCheck className="h-3 w-3" /> Assign Trainer
+                        </Button>
+                      )}
+                      {a.status === "in_progress" && canManage && (
+                        <Button size="sm" className="text-xs h-7 gap-1 bg-green-600 hover:bg-green-700"
+                          disabled={completing === a.id}
+                          onClick={() => completeTraining(a.id)}>
+                          {completing === a.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
+                          Complete Training
+                        </Button>
+                      )}
+                      {a.status === "completed" && (
+                        <Badge className="bg-green-100 text-green-700 border-0 text-xs">✓ Ready for Transfer</Badge>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-        <Table>
-          <TableHeader className="bg-gray-50">
-            <TableRow>
-              <TableHead className="font-semibold">Training Program</TableHead>
-              <TableHead className="font-semibold text-center">Participants</TableHead>
-              <TableHead className="font-semibold">Start Date</TableHead>
-              <TableHead className="font-semibold">End Date</TableHead>
-              <TableHead className="font-semibold text-center">Status</TableHead>
-              <TableHead className="font-semibold text-center">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredPrograms.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-8">No training programs found</TableCell>
-              </TableRow>
-            ) : (
-              filteredPrograms.map((program) => (
-                <TableRow key={program.id}>
-                  <TableCell className="font-medium text-blue-600">{program.name}</TableCell>
-                  <TableCell className="text-center">{program.participants}</TableCell>
-                  <TableCell>{new Date(program.start_date).toLocaleDateString()}</TableCell>
-                  <TableCell>{new Date(program.end_date).toLocaleDateString()}</TableCell>
-                  <TableCell className="text-center">{getStatusBadge(program.status)}</TableCell>
-                  <TableCell className="text-center">
-                    <Button variant="ghost" size="sm">
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <Dialog open={trainerOpen} onOpenChange={setTrainerOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Assign Trainer</DialogTitle></DialogHeader>
+          <Select value={trainerId} onValueChange={setTrainerId}>
+            <SelectTrigger><SelectValue placeholder="Select Trainer" /></SelectTrigger>
+            <SelectContent>
+              {employees.map(e => (
+                <SelectItem key={e.id} value={String(e.id)}>
+                  {e.first_name} {e.last_name} — {e.department}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTrainerOpen(false)}>Cancel</Button>
+            <Button onClick={assignTrainer} disabled={saving || !trainerId}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Assign
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-// ─── Main Recruitment Page ────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// MAIN PAGE
+// ═══════════════════════════════════════════════════════════════════════
 
 export default function Recruitment() {
-  const [activeTab, setActiveTab] = useState("vacancies");
+  const { user }  = useAuth();
+  const canManage = user?.role === "Admin" || user?.role === "HR";
 
   return (
     <DashboardLayout>
-      <div className="p-6 space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Recruitment</h1>
-          <p className="text-sm text-gray-500 mt-1">BLUE LOTUS HOTEL</p>
-        </div>
-
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="bg-gray-100 p-1 rounded-lg">
-            <TabsTrigger value="vacancies" className="rounded-md px-4 py-2">
-              Job Vacancies
-            </TabsTrigger>
-            <TabsTrigger value="applicants" className="rounded-md px-4 py-2">
-              Applicant Management
-            </TabsTrigger>
-            <TabsTrigger value="interviews" className="rounded-md px-4 py-2">
-              Scheduled Interviews
-            </TabsTrigger>
-            <TabsTrigger value="training" className="rounded-md px-4 py-2">
-              Training Programs
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="vacancies">
-            <JobVacanciesTab />
-          </TabsContent>
-
-          <TabsContent value="applicants">
-            <ApplicantManagementTab />
-          </TabsContent>
-
-          <TabsContent value="interviews">
-            <ScheduledInterviewsTab />
-          </TabsContent>
-
-          <TabsContent value="training">
-            <TrainingProgramsTab />
-          </TabsContent>
-        </Tabs>
+      <div className="mb-6">
+        <h1 className="font-display text-3xl font-semibold text-foreground">Recruitment</h1>
+        <p className="text-muted-foreground mt-1">Job postings, applicant pipeline, interviews, and training</p>
       </div>
+
+      <Tabs defaultValue="vacancies">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="vacancies">
+            <Briefcase className="h-4 w-4 mr-2" /> Job Vacancies
+          </TabsTrigger>
+          <TabsTrigger value="applicants">
+            <Users className="h-4 w-4 mr-2" /> Applicants
+          </TabsTrigger>
+          <TabsTrigger value="interviews">
+            <Calendar className="h-4 w-4 mr-2" /> Interviews
+          </TabsTrigger>
+          <TabsTrigger value="training">
+            <GraduationCap className="h-4 w-4 mr-2" /> Training
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="vacancies"   className="mt-6"><JobVacanciesTab canManage={canManage} /></TabsContent>
+        <TabsContent value="applicants"  className="mt-6"><ApplicantManagementTab canManage={canManage} /></TabsContent>
+        <TabsContent value="interviews"  className="mt-6"><ScheduledInterviewsTab /></TabsContent>
+        <TabsContent value="training"    className="mt-6"><TrainingProgramsTab canManage={canManage} /></TabsContent>
+      </Tabs>
     </DashboardLayout>
   );
 }
