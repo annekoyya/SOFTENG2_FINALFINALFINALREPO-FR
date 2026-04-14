@@ -361,114 +361,148 @@ public function hireApplicant(int $id): JsonResponse
         return response()->json(['success' => true, 'data' => $newHires]);
     }
     
-    public function transferToEmployee(int $newHireId): JsonResponse
-    {
-        $newHire = NewHire::findOrFail($newHireId);
-        
-        DB::beginTransaction();
-        
-        try {
-            $employee = Employee::find($newHire->employee_id);
-            
-            if (!$employee) {
-                return response()->json(['success' => false, 'message' => 'Employee not found'], 404);
-            }
-            
-            // Create user account
-            User::create([
-                'name' => $employee->first_name . ' ' . $employee->last_name,
-                'email' => $employee->email,
-                'password' => Hash::make('Employee@123'),
-                'role' => $employee->role,
-            ]);
-            
-            $newHire->update([
-                'onboarding_status' => 'transferred',
-                'transferred_at' => now(),
-            ]);
-            
-            DB::commit();
-            
-            return response()->json([
-                'success' => true, 
-                'data' => $employee,
-                'message' => 'Successfully transferred!'
-            ]);
-            
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
-        }
-    }
-
-    public function completeNewHireDetails(Request $request, int $id): JsonResponse
+/**
+ * Save all employee details before transfer.
+ * POST /api/recruitment/new-hires/{id}/complete-details
+ *
+ * ✅ Validates all required fields, updates new_hire + associated employee record.
+ *    Does NOT yet create the user account — that happens in transferToEmployee().
+ */
+public function completeNewHireDetails(Request $request, int $id): JsonResponse
 {
     $newHire = NewHire::findOrFail($id);
-    
+
     $validated = $request->validate([
-        'first_name' => 'required|string',
-        'last_name' => 'required|string',
-        'email' => 'required|email',
-        'phone_number' => 'required|string',
-        'date_of_birth' => 'required|date',
-        'home_address' => 'required|string',
-        'emergency_contact_name' => 'required|string',
-        'emergency_contact_number' => 'required|string',
-        'relationship' => 'required|string',
-        'department' => 'required|string',
-        'job_category' => 'required|string',
-        'shift_sched' => 'required|string',
-        'employment_type' => 'required|string',
-        'basic_salary' => 'required|numeric',
+        'first_name'               => 'required|string|max:255',
+        'last_name'                => 'required|string|max:255',
+        'middle_name'              => 'nullable|string|max:255',
+        'name_extension'           => 'nullable|string|max:20',
+        'date_of_birth'            => 'required|date',
+        'email'                    => 'required|email|max:255',
+        'phone_number'             => 'required|string|max:30',
+        'home_address'             => 'required|string|max:500',
+        'emergency_contact_name'   => 'required|string|max:255',
+        'emergency_contact_number' => 'required|string|max:30',
+        'relationship'             => 'required|string|max:100',
+        'tin'                      => 'nullable|string|max:50',
+        'sss_number'               => 'nullable|string|max:50',
+        'pagibig_number'           => 'nullable|string|max:50',
+        'philhealth_number'        => 'nullable|string|max:50',
+        'bank_name'                => 'nullable|string|max:100',
+        'account_name'             => 'nullable|string|max:255',
+        'account_number'           => 'nullable|string|max:50',
+        'start_date'               => 'required|date',
+        'department'               => 'required|string|max:100',
+        'job_category'             => 'required|string|max:100',
+        'shift_sched'              => 'required|in:morning,afternoon,night',
+        'employment_type'          => 'required|in:regular,probationary,contractual,part_time,intern',
+        'role'                     => 'required|in:Employee,HR,Accountant,Manager,Admin',
+        'basic_salary'             => 'required|numeric|min:0',
+        'reporting_manager'        => 'nullable|string|max:255',
     ]);
-    
+
     DB::beginTransaction();
-    
     try {
-        // Update new hire with completed details
+        // 1 — Update the new_hire record itself
         $newHire->update([
             ...$validated,
             'onboarding_status' => 'complete',
-            'completed_fields' => json_encode(array_keys($validated)),
+            'completed_fields'  => array_keys($validated),
         ]);
-        
-        // Update the associated employee record
-        $employee = Employee::find($newHire->employee_id);
-        if ($employee) {
-            $employee->update([
-                'first_name' => $validated['first_name'],
-                'last_name' => $validated['last_name'],
-                'email' => $validated['email'],
-                'phone_number' => $validated['phone_number'],
-                'date_of_birth' => $validated['date_of_birth'],
-                'home_address' => $validated['home_address'],
-                'emergency_contact_name' => $validated['emergency_contact_name'],
+
+        // 2 — Sync the associated employee record so it matches exactly
+        if ($newHire->employee_id) {
+            Employee::where('id', $newHire->employee_id)->update([
+                'first_name'               => $validated['first_name'],
+                'last_name'                => $validated['last_name'],
+                'middle_name'              => $validated['middle_name']   ?? null,
+                'name_extension'           => $validated['name_extension'] ?? null,
+                'date_of_birth'            => $validated['date_of_birth'],
+                'email'                    => $validated['email'],
+                'phone_number'             => $validated['phone_number'],
+                'home_address'             => $validated['home_address'],
+                'emergency_contact_name'   => $validated['emergency_contact_name'],
                 'emergency_contact_number' => $validated['emergency_contact_number'],
-                'relationship' => $validated['relationship'],
-                'department' => $validated['department'],
-                'job_category' => $validated['job_category'],
-                'shift_sched' => $validated['shift_sched'],
-                'employment_type' => $validated['employment_type'],
-                'basic_salary' => $validated['basic_salary'],
-                'status' => 'active',
+                'relationship'             => $validated['relationship'],
+                'tin'                      => $validated['tin']              ?? null,
+                'sss_number'               => $validated['sss_number']       ?? null,
+                'pagibig_number'           => $validated['pagibig_number']   ?? null,
+                'philhealth_number'        => $validated['philhealth_number'] ?? null,
+                'bank_name'                => $validated['bank_name']         ?? null,
+                'account_name'             => $validated['account_name']      ?? null,
+                'account_number'           => $validated['account_number']    ?? null,
+                'start_date'               => $validated['start_date'],
+                'department'               => $validated['department'],
+                'job_category'             => $validated['job_category'],
+                'shift_sched'              => $validated['shift_sched'],
+                'employment_type'          => $validated['employment_type'],
+                'role'                     => $validated['role'],
+                'basic_salary'             => $validated['basic_salary'],
+                'reporting_manager'        => $validated['reporting_manager'] ?? null,
+                'status'                   => 'onboarding',
             ]);
         }
-        
-        // Create user account
-        $user = User::create([
-            'name' => $validated['first_name'] . ' ' . $validated['last_name'],
-            'email' => $validated['email'],
-            'password' => Hash::make('Employee@123'),
-            'role' => 'Employee',
-        ]);
-        
+
         DB::commit();
-        
         return response()->json([
             'success' => true,
-            'message' => 'Employee details completed and transferred!'
+            'data'    => $newHire->fresh(),
+            'message' => 'Details saved successfully',
         ]);
-        
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+    }
+}
+
+/**
+ * Transfer new hire to employees — creates the user account.
+ * POST /api/recruitment/new-hires/{id}/transfer
+ *
+ * ✅ Expects completeNewHireDetails() was already called first (onboarding_status = 'complete').
+ *    Creates User record with temporary password. Marks new_hire as transferred.
+ */
+public function transferToEmployee(int $newHireId): JsonResponse
+{
+    $newHire = NewHire::with('employee')->findOrFail($newHireId);
+
+    if ($newHire->onboarding_status === 'transferred') {
+        return response()->json(['success' => false, 'message' => 'Already transferred.'], 422);
+    }
+
+    $employee = Employee::find($newHire->employee_id);
+    if (!$employee) {
+        return response()->json(['success' => false, 'message' => 'Associated employee record not found.'], 404);
+    }
+
+    DB::beginTransaction();
+    try {
+        // Create user account (check for duplicate email first)
+        $existingUser = User::where('email', $employee->email)->first();
+        if (!$existingUser) {
+            User::create([
+                'name'     => $employee->first_name . ' ' . $employee->last_name,
+                'email'    => $employee->email,
+                'password' => Hash::make('Employee@123'),
+                'role'     => $employee->role,
+            ]);
+        }
+
+        // Mark employee as active
+        $employee->update(['status' => 'active']);
+
+        // Mark new hire as transferred
+        $newHire->update([
+            'onboarding_status' => 'transferred',
+            'transferred_at'    => now(),
+        ]);
+
+        DB::commit();
+        return response()->json([
+            'success' => true,
+            'data'    => $employee->fresh(),
+            'message' => "{$employee->first_name} {$employee->last_name} successfully transferred to Employees!",
+        ]);
     } catch (\Exception $e) {
         DB::rollBack();
         return response()->json(['success' => false, 'message' => $e->getMessage()], 500);

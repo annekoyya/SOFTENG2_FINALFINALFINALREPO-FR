@@ -1,6 +1,3 @@
-// src/pages/Accounting.tsx
-// COMPLETE FIXED VERSION - REPLACE ENTIRE FILE
-
 import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -8,15 +5,18 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { useAccounting, type Payslip, type PayrollSummary, type AuditLog } from "@/hooks/useAccounting";
+import {
+  useAccounting,
+  type Payslip,
+  type PayrollSummary,
+  type AuditLog,
+} from "@/hooks/useAccounting";
 import {
   Plus, Play, Mail, Download, CalendarDays, Eye, CheckCircle,
-  DollarSign, Loader2, ShieldCheck, TrendingUp, ChevronRight,
-  FileText,
+  DollarSign, Loader2, ShieldCheck, TrendingUp, ChevronRight, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -38,40 +38,70 @@ const SLIP_STATUS_STYLES: Record<string, string> = {
   cancelled: "bg-red-100 text-red-700",
 };
 
-const fmt = (n: number) => `₱${(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
+const fmt = (n: number) =>
+  `₱${(n || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PAYSLIP DETAIL SHEET
 // ═══════════════════════════════════════════════════════════════════════════
 
 function PayslipDetailSheet({
-  payslip, open, onClose, onApprove, onMarkPaid, onSendEmail, onDownloadPdf, onAddAdjustment,
+  payslip, open, onClose,
+  onApprove, onMarkPaid, onSendEmail, onDownloadPdf, onAddAdjustment,
 }: {
-  payslip: Payslip | null; open: boolean; onClose: () => void;
+  payslip: Payslip | null;
+  open: boolean;
+  onClose: () => void;
   onApprove: (id: number) => Promise<void>;
   onMarkPaid: (id: number) => Promise<void>;
   onSendEmail: (id: number) => Promise<void>;
   onDownloadPdf: (id: number) => void;
-  onAddAdjustment: (id: number, cat: "earning"|"deduction", label: string, amount: number, note: string) => Promise<void>;
+  onAddAdjustment: (
+    id: number,
+    cat: "earning" | "deduction",
+    label: string,
+    amount: number,
+    note: string,
+  ) => Promise<void>;
 }) {
-  const { toast }                   = useToast();
-  const [acting,    setActing]      = useState(false);
-  const [adjOpen,   setAdjOpen]     = useState(false);
-  const [adjForm,   setAdjForm]     = useState({ category: "earning" as "earning"|"deduction", label: "", amount: "", note: "" });
+  const { toast } = useToast();
+  const [acting,  setActing]  = useState(false);
+  const [adjOpen, setAdjOpen] = useState(false);
+  const [adjForm, setAdjForm] = useState({
+    category: "earning" as "earning" | "deduction",
+    label: "", amount: "", note: "",
+  });
 
   if (!payslip) return null;
 
-  const doApprove = async () => { setActing(true); try { await onApprove(payslip.id); toast({ title: "Approved" }); } catch (e) { toast({ title: e instanceof Error ? e.message : "Failed", variant: "destructive" }); } finally { setActing(false); } };
-  const doPay     = async () => { setActing(true); try { await onMarkPaid(payslip.id); toast({ title: "Marked as paid" }); } catch (e) { toast({ title: e instanceof Error ? e.message : "Failed", variant: "destructive" }); } finally { setActing(false); } };
-  const doEmail   = async () => { setActing(true); try { await onSendEmail(payslip.id); toast({ title: "Email sent" }); } catch (e) { toast({ title: e instanceof Error ? e.message : "Failed", variant: "destructive" }); } finally { setActing(false); } };
-  const doAdj     = async () => {
-    if (!adjForm.label || !adjForm.amount || !adjForm.note) { toast({ title: "Fill all fields", variant: "destructive" }); return; }
+  const wrap = (fn: () => Promise<void>, successMsg: string) => async () => {
+    setActing(true);
+    try   { await fn(); toast({ title: successMsg }); }
+    catch (e) { toast({ title: e instanceof Error ? e.message : "Failed", variant: "destructive" }); }
+    finally { setActing(false); }
+  };
+
+  const doApprove = wrap(() => onApprove(payslip.id), "Approved");
+  const doPay     = wrap(() => onMarkPaid(payslip.id), "Marked as paid");
+  const doEmail   = wrap(() => onSendEmail(payslip.id), "Email sent");
+
+  const doAdj = async () => {
+    if (!adjForm.label || !adjForm.amount || !adjForm.note) {
+      toast({ title: "Fill all fields", variant: "destructive" });
+      return;
+    }
     setActing(true);
     try {
-      await onAddAdjustment(payslip.id, adjForm.category, adjForm.label, parseFloat(adjForm.amount), adjForm.note);
-      toast({ title: "Adjustment added" }); setAdjOpen(false); setAdjForm({ category: "earning", label: "", amount: "", note: "" });
-    } catch (e) { toast({ title: e instanceof Error ? e.message : "Failed", variant: "destructive" }); }
-    finally { setActing(false); }
+      await onAddAdjustment(
+        payslip.id, adjForm.category, adjForm.label,
+        parseFloat(adjForm.amount), adjForm.note,
+      );
+      toast({ title: "Adjustment added" });
+      setAdjOpen(false);
+      setAdjForm({ category: "earning", label: "", amount: "", note: "" });
+    } catch (e) {
+      toast({ title: e instanceof Error ? e.message : "Failed", variant: "destructive" });
+    } finally { setActing(false); }
   };
 
   const earnings = [
@@ -102,31 +132,28 @@ function PayslipDetailSheet({
     <Sheet open={open} onOpenChange={onClose}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Payslip — {payslip.employee?.first_name} {payslip.employee?.last_name}</SheetTitle>
-          <div className="text-sm text-muted-foreground">{payslip.period?.label} · {payslip.employee?.department}</div>
+          <SheetTitle>
+            Payslip — {payslip.employee?.first_name} {payslip.employee?.last_name}
+          </SheetTitle>
+          <div className="text-sm text-muted-foreground">
+            {payslip.period?.label} · {payslip.employee?.department}
+          </div>
         </SheetHeader>
 
         <div className="mt-5 space-y-5">
-          {/* Status + Attendance */}
+          {/* Attendance summary */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-muted/30 rounded-lg p-3">
-              <div className="text-xs text-muted-foreground">Status</div>
-              <div className="font-medium text-sm mt-0.5">
-                <Badge className={cn("text-xs border-0 capitalize", SLIP_STATUS_STYLES[payslip.status])}>{payslip.status}</Badge>
+            {[
+              { label: "Status",      value: <Badge className={cn("text-xs border-0 capitalize", SLIP_STATUS_STYLES[payslip.status])}>{payslip.status}</Badge> },
+              { label: "Days Worked", value: `${payslip.days_worked}/${payslip.working_days_in_period}` },
+              { label: "Days Absent", value: payslip.days_absent },
+              { label: "Mins Late",   value: payslip.minutes_late > 0 ? `${payslip.minutes_late}m` : "0" },
+            ].map(({ label, value }) => (
+              <div key={label} className="bg-muted/30 rounded-lg p-3">
+                <div className="text-xs text-muted-foreground">{label}</div>
+                <div className="font-medium text-sm mt-0.5">{value}</div>
               </div>
-            </div>
-            <div className="bg-muted/30 rounded-lg p-3">
-              <div className="text-xs text-muted-foreground">Days Worked</div>
-              <div className="font-medium text-sm mt-0.5">{payslip.days_worked}/{payslip.working_days_in_period}</div>
-            </div>
-            <div className="bg-muted/30 rounded-lg p-3">
-              <div className="text-xs text-muted-foreground">Days Absent</div>
-              <div className="font-medium text-sm mt-0.5">{payslip.days_absent}</div>
-            </div>
-            <div className="bg-muted/30 rounded-lg p-3">
-              <div className="text-xs text-muted-foreground">Minutes Late</div>
-              <div className="font-medium text-sm mt-0.5">{payslip.minutes_late > 0 ? `${payslip.minutes_late}m` : "0"}</div>
-            </div>
+            ))}
           </div>
 
           {/* Earnings */}
@@ -140,7 +167,8 @@ function PayslipDetailSheet({
                 </div>
               ))}
               <div className="flex justify-between font-bold text-sm pt-2 border-t border-border">
-                <span>Gross Pay</span><span className="text-green-700">{fmt(payslip.gross_pay)}</span>
+                <span>Gross Pay</span>
+                <span className="text-green-700">{fmt(payslip.gross_pay)}</span>
               </div>
             </div>
           </div>
@@ -156,15 +184,16 @@ function PayslipDetailSheet({
                 </div>
               ))}
               <div className="flex justify-between font-bold text-sm pt-2 border-t border-border">
-                <span>Total Deductions</span><span className="text-red-600">{fmt(payslip.total_deductions)}</span>
+                <span>Total Deductions</span>
+                <span className="text-red-600">{fmt(payslip.total_deductions)}</span>
               </div>
             </div>
           </div>
 
-          {/* Net Pay */}
+          {/* Net pay */}
           <div className="rounded-xl bg-muted/30 p-4 flex justify-between items-center">
             <span className="font-bold">Net Pay</span>
-            <span className="text-2xl font-bold text-foreground">{fmt(payslip.net_pay)}</span>
+            <span className="text-2xl font-bold">{fmt(payslip.net_pay)}</span>
           </div>
 
           {/* Employer contributions */}
@@ -172,9 +201,9 @@ function PayslipDetailSheet({
             <div>
               <div className="font-semibold text-sm mb-2">Employer Contributions</div>
               {[
-                { label: "SSS Employer",      amount: payslip.sss_employer },
-                { label: "PhilHealth Employer",amount: payslip.philhealth_employer },
-                { label: "Pag-IBIG Employer", amount: payslip.pagibig_employer },
+                { label: "SSS Employer",       amount: payslip.sss_employer },
+                { label: "PhilHealth Employer", amount: payslip.philhealth_employer },
+                { label: "Pag-IBIG Employer",  amount: payslip.pagibig_employer },
               ].filter(e => e.amount > 0).map(e => (
                 <div key={e.label} className="flex justify-between text-sm">
                   <span className="text-muted-foreground">{e.label}</span>
@@ -188,21 +217,38 @@ function PayslipDetailSheet({
           {adjOpen && (
             <div className="border border-border rounded-lg p-4 space-y-3 bg-muted/20">
               <div className="font-semibold text-sm">Add Adjustment</div>
-              <Select value={adjForm.category} onValueChange={v => setAdjForm(p => ({ ...p, category: v as "earning"|"deduction" }))}>
+              <Select
+                value={adjForm.category}
+                onValueChange={v => setAdjForm(p => ({ ...p, category: v as "earning" | "deduction" }))}
+              >
                 <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="earning">Earning (adds to gross)</SelectItem>
                   <SelectItem value="deduction">Deduction (reduces net)</SelectItem>
                 </SelectContent>
               </Select>
-              <Input placeholder="Label (e.g. Performance bonus)" value={adjForm.label} onChange={e => setAdjForm(p => ({ ...p, label: e.target.value }))} />
-              <Input type="number" placeholder="Amount ₱" value={adjForm.amount} onChange={e => setAdjForm(p => ({ ...p, amount: e.target.value }))} />
-              <Input placeholder="Reason (required for audit trail)" value={adjForm.note} onChange={e => setAdjForm(p => ({ ...p, note: e.target.value }))} />
+              <Input
+                placeholder="Label (e.g. Performance bonus)"
+                value={adjForm.label}
+                onChange={e => setAdjForm(p => ({ ...p, label: e.target.value }))}
+              />
+              <Input
+                type="number" placeholder="Amount ₱"
+                value={adjForm.amount}
+                onChange={e => setAdjForm(p => ({ ...p, amount: e.target.value }))}
+              />
+              <Input
+                placeholder="Reason (required for audit trail)"
+                value={adjForm.note}
+                onChange={e => setAdjForm(p => ({ ...p, note: e.target.value }))}
+              />
               <div className="flex gap-2">
                 <Button size="sm" onClick={doAdj} disabled={acting} className="flex-1">
                   {acting && <Loader2 className="mr-2 h-3 w-3 animate-spin" />} Add
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => setAdjOpen(false)} className="flex-1">Cancel</Button>
+                <Button size="sm" variant="outline" onClick={() => setAdjOpen(false)} className="flex-1">
+                  Cancel
+                </Button>
               </div>
             </div>
           )}
@@ -210,10 +256,12 @@ function PayslipDetailSheet({
           {/* Actions */}
           <div className="space-y-2 pt-2 border-t border-border">
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="flex-1 gap-1" onClick={() => onDownloadPdf(payslip.id)}>
+              <Button variant="outline" size="sm" className="flex-1 gap-1"
+                onClick={() => onDownloadPdf(payslip.id)}>
                 <Download className="h-4 w-4" /> PDF
               </Button>
-              <Button variant="outline" size="sm" className="flex-1 gap-1" onClick={doEmail} disabled={acting}>
+              <Button variant="outline" size="sm" className="flex-1 gap-1"
+                onClick={doEmail} disabled={acting}>
                 {acting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
                 Email
               </Button>
@@ -221,19 +269,27 @@ function PayslipDetailSheet({
             {payslip.status !== "paid" && payslip.status !== "cancelled" && (
               <div className="flex gap-2">
                 {!adjOpen && (
-                  <Button variant="outline" size="sm" className="flex-1" onClick={() => setAdjOpen(true)}>
+                  <Button variant="outline" size="sm" className="flex-1"
+                    onClick={() => setAdjOpen(true)}>
                     Adjust
                   </Button>
                 )}
                 {payslip.status === "computed" && (
-                  <Button size="sm" className="flex-1 gap-1" onClick={doApprove} disabled={acting}>
-                    {acting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                  <Button size="sm" className="flex-1 gap-1"
+                    onClick={doApprove} disabled={acting}>
+                    {acting
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <CheckCircle className="h-4 w-4" />}
                     Approve
                   </Button>
                 )}
                 {payslip.status === "approved" && (
-                  <Button size="sm" className="flex-1 gap-1 bg-green-600 hover:bg-green-700" onClick={doPay} disabled={acting}>
-                    {acting ? <Loader2 className="h-4 w-4 animate-spin" /> : <DollarSign className="h-4 w-4" />}
+                  <Button size="sm"
+                    className="flex-1 gap-1 bg-green-600 hover:bg-green-700"
+                    onClick={doPay} disabled={acting}>
+                    {acting
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <DollarSign className="h-4 w-4" />}
                     Mark Paid
                   </Button>
                 )}
@@ -247,12 +303,16 @@ function PayslipDetailSheet({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PAYROLL SUMMARY TAB
+// SUMMARY TAB
 // ═══════════════════════════════════════════════════════════════════════════
 
 function SummaryTab({ summary, isLoading }: { summary: PayrollSummary | null; isLoading: boolean }) {
-  if (isLoading) return <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
-  if (!summary)  return (
+  if (isLoading) return (
+    <div className="flex justify-center py-16">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    </div>
+  );
+  if (!summary) return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16">
       <TrendingUp className="h-10 w-10 text-muted-foreground/30 mb-3" />
       <p className="text-muted-foreground">No data. Compute payroll first.</p>
@@ -261,13 +321,12 @@ function SummaryTab({ summary, isLoading }: { summary: PayrollSummary | null; is
 
   return (
     <div className="space-y-5">
-      {/* Overview */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Employees",       value: String(summary.total_employees), color: "text-foreground" },
-          { label: "Total Gross Pay", value: fmt(summary.total_gross),        color: "text-green-600" },
-          { label: "Total Deductions",value: fmt(summary.total_deductions),   color: "text-red-600"   },
-          { label: "Total Net Pay",   value: fmt(summary.total_net),          color: "text-blue-700"  },
+          { label: "Employees",        value: String(summary.total_employees), color: "text-foreground" },
+          { label: "Total Gross Pay",  value: fmt(summary.total_gross),        color: "text-green-600" },
+          { label: "Total Deductions", value: fmt(summary.total_deductions),   color: "text-red-600"   },
+          { label: "Total Net Pay",    value: fmt(summary.total_net),          color: "text-blue-700"  },
         ].map(({ label, value, color }) => (
           <div key={label} className="rounded-xl border border-border bg-card p-4">
             <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">{label}</div>
@@ -276,7 +335,6 @@ function SummaryTab({ summary, isLoading }: { summary: PayrollSummary | null; is
         ))}
       </div>
 
-      {/* Statutory remittance */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="px-5 py-3 border-b border-border bg-blue-50">
           <h3 className="font-semibold text-blue-900 text-sm">Government Remittance Summary</h3>
@@ -291,39 +349,31 @@ function SummaryTab({ summary, isLoading }: { summary: PayrollSummary | null; is
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            <tr className="hover:bg-muted/20">
-              <td className="px-5 py-3 font-medium">SSS</td>
-              <td className="px-5 py-3 text-right">{fmt(summary.total_sss_employee)}</td>
-              <td className="px-5 py-3 text-right">{fmt(summary.total_sss_employer)}</td>
-              <td className="px-5 py-3 text-right font-semibold">{fmt(summary.total_sss_employee + summary.total_sss_employer)}</td>
-            </tr>
-            <tr className="hover:bg-muted/20">
-              <td className="px-5 py-3 font-medium">PhilHealth</td>
-              <td className="px-5 py-3 text-right">{fmt(summary.total_philhealth_employee)}</td>
-              <td className="px-5 py-3 text-right">{fmt(summary.total_philhealth_employer)}</td>
-              <td className="px-5 py-3 text-right font-semibold">{fmt(summary.total_philhealth_employee + summary.total_philhealth_employer)}</td>
-            </tr>
-            <tr className="hover:bg-muted/20">
-              <td className="px-5 py-3 font-medium">Pag-IBIG</td>
-              <td className="px-5 py-3 text-right">{fmt(summary.total_pagibig_employee)}</td>
-              <td className="px-5 py-3 text-right">{fmt(summary.total_pagibig_employer)}</td>
-              <td className="px-5 py-3 text-right font-semibold">{fmt(summary.total_pagibig_employee + summary.total_pagibig_employer)}</td>
-            </tr>
-            <tr className="hover:bg-muted/20">
-              <td className="px-5 py-3 font-medium">BIR / Tax</td>
-              <td className="px-5 py-3 text-right">{fmt(summary.total_bir)}</td>
-              <td className="px-5 py-3 text-right">—</td>
-              <td className="px-5 py-3 text-right font-semibold">{fmt(summary.total_bir)}</td>
-            </tr>
+            {[
+              ["SSS",        summary.total_sss_employee,        summary.total_sss_employer],
+              ["PhilHealth", summary.total_philhealth_employee, summary.total_philhealth_employer],
+              ["Pag-IBIG",   summary.total_pagibig_employee,    summary.total_pagibig_employer],
+              ["BIR / Tax",  summary.total_bir,                 0],
+            ].map(([lbl, emp, er]) => (
+              <tr key={lbl as string} className="hover:bg-muted/20">
+                <td className="px-5 py-3 font-medium">{lbl}</td>
+                <td className="px-5 py-3 text-right">{fmt(emp as number)}</td>
+                <td className="px-5 py-3 text-right">{er ? fmt(er as number) : "—"}</td>
+                <td className="px-5 py-3 text-right font-semibold">
+                  {fmt((emp as number) + (er as number))}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
 
-      {/* By department */}
       {Object.keys(summary.by_department).length > 0 && (
         <div className="rounded-xl border border-border bg-card overflow-hidden">
           <div className="px-5 py-3 border-b border-border">
-            <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">By Department</h3>
+            <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+              By Department
+            </h3>
           </div>
           <table className="w-full text-sm">
             <thead className="bg-muted/30">
@@ -352,20 +402,24 @@ function SummaryTab({ summary, isLoading }: { summary: PayrollSummary | null; is
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// AUDIT TRAIL TAB
+// AUDIT TAB
 // ═══════════════════════════════════════════════════════════════════════════
 
 const ACTION_STYLES: Record<string, string> = {
-  computed:   "bg-amber-100 text-amber-700",
-  adjusted:   "bg-purple-100 text-purple-700",
-  approved:   "bg-blue-100 text-blue-700",
-  paid:       "bg-green-100 text-green-700",
-  email_sent: "bg-cyan-100 text-cyan-700",
+  computed:      "bg-amber-100 text-amber-700",
+  adjusted:      "bg-purple-100 text-purple-700",
+  approved:      "bg-blue-100 text-blue-700",
+  paid:          "bg-green-100 text-green-700",
+  email_sent:    "bg-cyan-100 text-cyan-700",
   pdf_generated: "bg-indigo-100 text-indigo-700",
 };
 
 function AuditTab({ logs, isLoading }: { logs: AuditLog[]; isLoading: boolean }) {
-  if (isLoading) return <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
+  if (isLoading) return (
+    <div className="flex justify-center py-16">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    </div>
+  );
   if (logs.length === 0) return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16">
       <ShieldCheck className="h-10 w-10 text-muted-foreground/30 mb-3" />
@@ -383,27 +437,35 @@ function AuditTab({ logs, isLoading }: { logs: AuditLog[]; isLoading: boolean })
         <table className="w-full text-sm">
           <thead className="bg-muted/30 border-b border-border">
             <tr>
-              <th className="px-4 py-3 text-left font-semibold text-xs">Timestamp</th>
-              <th className="px-4 py-3 text-left font-semibold text-xs">Action</th>
-              <th className="px-4 py-3 text-left font-semibold text-xs">Entity</th>
-              <th className="px-4 py-3 text-left font-semibold text-xs">By</th>
-              <th className="px-4 py-3 text-left font-semibold text-xs">Description</th>
+              {["Timestamp", "Action", "Entity", "By", "Description"].map(h => (
+                <th key={h} className="px-4 py-3 text-left font-semibold text-xs">{h}</th>
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {logs.map(log => (
               <tr key={log.id} className="hover:bg-muted/20">
                 <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">
-                  {new Date(log.created_at).toLocaleString("en-PH", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  {new Date(log.created_at).toLocaleString("en-PH", {
+                    month: "short", day: "numeric",
+                    hour: "2-digit", minute: "2-digit",
+                  })}
                 </td>
                 <td className="px-4 py-2.5">
-                  <Badge className={cn("text-xs border-0 capitalize", ACTION_STYLES[log.action] ?? "bg-gray-100 text-gray-700")}>
+                  <Badge className={cn("text-xs border-0 capitalize",
+                    ACTION_STYLES[log.action] ?? "bg-gray-100 text-gray-700")}>
                     {log.action.replace(/_/g, " ")}
                   </Badge>
                 </td>
-                <td className="px-4 py-2.5 text-xs text-muted-foreground">{log.entity_type} #{log.entity_id}</td>
-                <td className="px-4 py-2.5 text-xs font-medium">{log.performer?.name ?? `#${log.performed_by}`}</td>
-                <td className="px-4 py-2.5 text-xs text-muted-foreground max-w-xs truncate">{log.description ?? "—"}</td>
+                <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                  {log.entity_type} #{log.entity_id}
+                </td>
+                <td className="px-4 py-2.5 text-xs font-medium">
+                  {log.performer?.name ?? `#${log.performed_by}`}
+                </td>
+                <td className="px-4 py-2.5 text-xs text-muted-foreground max-w-xs truncate">
+                  {log.description ?? "—"}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -418,46 +480,42 @@ function AuditTab({ logs, isLoading }: { logs: AuditLog[]; isLoading: boolean })
 // ═══════════════════════════════════════════════════════════════════════════
 
 export default function Accounting() {
-  const { toast } = useToast();
-  const { user }  = useAuth();
-  const role      = user?.role ?? "";
-  const canManage = role === "Admin" || role === "Accountant" || role === "HR";
+  const { toast }  = useToast();
+  const { user }   = useAuth();
+  const role       = user?.role ?? "";
+  const canManage  = ["Admin", "Accountant", "HR"].includes(role);
 
   const {
     periods, payslips, selectedPayslip, summary, auditLogs, isLoading, error,
     fetchPeriods, generateNextPeriod, fetchPayslips, fetchPayslip,
     computeAll, approvePayslip, markAsPaid, approveAll,
     fetchSummary, fetchAuditLogs,
-    sendEmail, bulkSendEmail, downloadPdf, addAdjustment,
+    sendEmail, bulkSendEmail, downloadPdf, downloadSummaryPdf, addAdjustment,
     clearSelected, clearError,
   } = useAccounting();
 
-  const [activePeriodId, setActivePeriodId] = useState<number | null>(null);
-  const [activeTab,      setActiveTab]      = useState("payslips");
-  const [slipOpen,       setSlipOpen]       = useState(false);
-  const [computing,      setComputing]      = useState(false);
-  const [emailing,       setEmailing]       = useState(false);
-  const [generating,     setGenerating]     = useState(false);
-  const [approveAllLoading, setApproveAllLoading] = useState(false);
-  const [employees,      setEmployees]      = useState<any[]>([]);
+  const [activePeriodId,     setActivePeriodId]     = useState<number | null>(null);
+  const [activeTab,          setActiveTab]          = useState("payslips");
+  const [slipOpen,           setSlipOpen]           = useState(false);
+  const [computing,          setComputing]          = useState(false);
+  const [emailing,           setEmailing]           = useState(false);
+  const [generating,         setGenerating]         = useState(false);
+  const [approveAllLoading,  setApproveAllLoading]  = useState(false);
+  const [downloadingReport,  setDownloadingReport]  = useState(false);
+  const [employees,          setEmployees]          = useState<any[]>([]);
 
   const activePeriod = periods.find(p => p.id === activePeriodId);
 
-  // Fetch employees for the empty state display
+  // Fetch employees for empty-state preview
   useEffect(() => {
-    const fetchEmployees = async () => {
+    (async () => {
       try {
         const { authFetch } = await import("@/hooks/api");
-        const res = await authFetch("/api/employees");
+        const res  = await authFetch("/api/employees");
         const data = await res.json();
-        if (data.success) {
-          setEmployees(data.data.data || []);
-        }
-      } catch (error) {
-        console.error("Failed to fetch employees");
-      }
-    };
-    fetchEmployees();
+        if (data.success) setEmployees(data.data?.data ?? data.data ?? []);
+      } catch { /* silent */ }
+    })();
   }, []);
 
   useEffect(() => { fetchPeriods(); }, []);
@@ -481,16 +539,22 @@ export default function Accounting() {
     if (error) { toast({ title: error, variant: "destructive" }); clearError(); }
   }, [error]);
 
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
   const handleComputeAll = async () => {
     if (!activePeriodId) return;
     setComputing(true);
     try {
       const r = await computeAll(activePeriodId);
-      toast({ title: `Payroll computed`, description: `${r.success.length} payslips generated. ${r.failed.length} failed.` });
+      toast({
+        title:       "Payroll computed",
+        description: `${r.success.length} payslips generated. ${r.failed.length} failed.`,
+      });
       fetchSummary(activePeriodId);
       fetchPayslips(activePeriodId);
-    } catch (e) { toast({ title: e instanceof Error ? e.message : "Failed", variant: "destructive" }); }
-    finally { setComputing(false); }
+    } catch (e) {
+      toast({ title: e instanceof Error ? e.message : "Failed", variant: "destructive" });
+    } finally { setComputing(false); }
   };
 
   const handleApproveAll = async () => {
@@ -500,8 +564,9 @@ export default function Accounting() {
       const r = await approveAll(activePeriodId);
       toast({ title: `${r.count} payslips approved` });
       fetchPeriods();
-    } catch (e) { toast({ title: e instanceof Error ? e.message : "Failed", variant: "destructive" }); }
-    finally { setApproveAllLoading(false); }
+    } catch (e) {
+      toast({ title: e instanceof Error ? e.message : "Failed", variant: "destructive" });
+    } finally { setApproveAllLoading(false); }
   };
 
   const handleBulkEmail = async () => {
@@ -509,9 +574,10 @@ export default function Accounting() {
     setEmailing(true);
     try {
       const r = await bulkSendEmail(activePeriodId);
-      toast({ title: `Emails sent`, description: `${r.sent_count} sent, ${r.failed_count} failed` });
-    } catch (e) { toast({ title: e instanceof Error ? e.message : "Failed", variant: "destructive" }); }
-    finally { setEmailing(false); }
+      toast({ title: "Emails sent", description: `${r.sent_count} sent, ${r.failed_count} failed` });
+    } catch (e) {
+      toast({ title: e instanceof Error ? e.message : "Failed", variant: "destructive" });
+    } finally { setEmailing(false); }
   };
 
   const handleGenerateNext = async () => {
@@ -520,87 +586,93 @@ export default function Accounting() {
       const p = await generateNextPeriod("semi_monthly");
       setActivePeriodId(p.id);
       toast({ title: `${p.label} created` });
-    } catch (e) { toast({ title: e instanceof Error ? e.message : "Failed", variant: "destructive" }); }
-    finally { setGenerating(false); }
+    } catch (e) {
+      toast({ title: e instanceof Error ? e.message : "Failed", variant: "destructive" });
+    } finally { setGenerating(false); }
   };
 
-  const downloadPdfReport = async () => {
+  // ✅ FIXED: uses downloadSummaryPdf from the hook (authFetch + blob)
+  const handleDownloadReport = async () => {
     if (!activePeriodId) return;
-    const token = localStorage.getItem('token');
+    setDownloadingReport(true);
     try {
-      const response = await fetch(`/api/payroll-periods/${activePeriodId}/summary-pdf`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/pdf',
-        },
-      });
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `payroll_summary_${activePeriod?.label || 'period'}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      } else {
-        toast({ title: "PDF download failed", variant: "destructive" });
-      }
-    } catch (error) {
-      toast({ title: "Error downloading PDF", variant: "destructive" });
-    }
+      await downloadSummaryPdf(activePeriodId, activePeriod?.label);
+      toast({ title: "Report downloaded" });
+    } catch (e) {
+      toast({ title: e instanceof Error ? e.message : "Download failed", variant: "destructive" });
+    } finally { setDownloadingReport(false); }
   };
 
-  const filteredPayslips = payslips.filter(p => !activePeriodId || p.payroll_period_id === activePeriodId);
+  const filteredPayslips = payslips.filter(
+    p => !activePeriodId || p.payroll_period_id === activePeriodId
+  );
 
-  // Workflow steps
-  const step2Done = activePeriod && ["computed","approved","paid"].includes(activePeriod.status);
-  const step3Done = activePeriod && ["approved","paid"].includes(activePeriod.status);
+  const step2Done = activePeriod && ["computed", "approved", "paid"].includes(activePeriod.status);
+  const step3Done = activePeriod && ["approved", "paid"].includes(activePeriod.status);
   const step4Done = activePeriod?.status === "paid";
-
-  const employeesList = employees;
 
   return (
     <DashboardLayout>
       <div className="space-y-5">
+
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-foreground">Accounting & Payroll</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Payslip generation, approval workflow, statutory contributions</p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Payslip generation, approval workflow, statutory contributions
+          </p>
         </div>
 
         {/* Workflow steps */}
         <div className="flex items-center gap-2 text-xs flex-wrap">
           {[
             { n: 1, label: "Select Period",  done: !!activePeriod },
-            { n: 2, label: "Compute",        done: !!step2Done },
-            { n: 3, label: "Approve All",    done: !!step3Done },
-            { n: 4, label: "Email Payslips", done: !!step4Done },
+            { n: 2, label: "Compute",        done: !!step2Done    },
+            { n: 3, label: "Approve All",    done: !!step3Done    },
+            { n: 4, label: "Email Payslips", done: !!step4Done    },
           ].map(({ n, label, done }, i, arr) => (
             <span key={n} className="flex items-center gap-1.5">
-              <span className={cn("flex items-center gap-1 px-2.5 py-1 rounded-full font-medium transition-all",
-                done ? "bg-green-100 text-green-700" : n === (arr.find(x => !x.done)?.n) ? "bg-blue-100 text-blue-700 ring-1 ring-blue-300" : "bg-muted text-muted-foreground")}>
-                <span className={cn("h-4 w-4 rounded-full flex items-center justify-center text-[10px] font-bold",
-                  done ? "bg-green-500 text-white" : "bg-current text-background opacity-70")}>{done ? "✓" : n}</span>
+              <span className={cn(
+                "flex items-center gap-1 px-2.5 py-1 rounded-full font-medium transition-all",
+                done
+                  ? "bg-green-100 text-green-700"
+                  : n === (arr.find(x => !x.done)?.n)
+                    ? "bg-blue-100 text-blue-700 ring-1 ring-blue-300"
+                    : "bg-muted text-muted-foreground",
+              )}>
+                <span className={cn(
+                  "h-4 w-4 rounded-full flex items-center justify-center text-[10px] font-bold",
+                  done ? "bg-green-500 text-white" : "bg-current text-background opacity-70",
+                )}>
+                  {done ? "✓" : n}
+                </span>
                 {label}
               </span>
-              {i < arr.length - 1 && <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+              {i < arr.length - 1 && (
+                <ChevronRight className="h-3 w-3 text-muted-foreground" />
+              )}
             </span>
           ))}
         </div>
 
-        {/* Period selector + actions */}
+        {/* Period selector + action bar */}
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <CalendarDays className="h-4 w-4 text-muted-foreground" />
-            <Select value={activePeriodId ? String(activePeriodId) : ""} onValueChange={v => setActivePeriodId(Number(v))}>
-              <SelectTrigger className="w-60"><SelectValue placeholder="Select pay period" /></SelectTrigger>
+            <Select
+              value={activePeriodId ? String(activePeriodId) : ""}
+              onValueChange={v => setActivePeriodId(Number(v))}
+            >
+              <SelectTrigger className="w-60">
+                <SelectValue placeholder="Select pay period" />
+              </SelectTrigger>
               <SelectContent>
                 {periods.map(p => (
                   <SelectItem key={p.id} value={String(p.id)}>
                     <span>{p.label}</span>
-                    <Badge className={cn("ml-2 text-[10px] border-0", PERIOD_STATUS_STYLES[p.status])}>{p.status}</Badge>
+                    <Badge className={cn("ml-2 text-[10px] border-0", PERIOD_STATUS_STYLES[p.status])}>
+                      {p.status}
+                    </Badge>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -608,45 +680,77 @@ export default function Accounting() {
           </div>
 
           <div className="flex items-center gap-2 ml-auto flex-wrap">
-            <Button variant="outline" size="sm" onClick={handleGenerateNext} disabled={generating} className="gap-1">
-              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} New Period
+            <Button variant="outline" size="sm" onClick={handleGenerateNext}
+              disabled={generating} className="gap-1">
+              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              New Period
             </Button>
 
             {canManage && !step2Done && (
-              <Button size="sm" onClick={handleComputeAll} disabled={computing || !activePeriodId} className="gap-1">
+              <Button size="sm" onClick={handleComputeAll}
+                disabled={computing || !activePeriodId} className="gap-1">
                 {computing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                 {computing ? "Computing…" : "Compute All"}
               </Button>
             )}
+
             {canManage && step2Done && !step3Done && (
-              <Button size="sm" onClick={handleApproveAll} disabled={approveAllLoading} className="gap-1">
-                {approveAllLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+              <Button size="sm" onClick={handleApproveAll}
+                disabled={approveAllLoading} className="gap-1">
+                {approveAllLoading
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <CheckCircle className="h-4 w-4" />}
                 Approve All
               </Button>
             )}
+
             {canManage && step3Done && (
-              <Button size="sm" variant="outline" onClick={handleBulkEmail} disabled={emailing} className="gap-1">
+              <Button size="sm" variant="outline" onClick={handleBulkEmail}
+                disabled={emailing} className="gap-1">
                 {emailing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
                 Email All
               </Button>
             )}
 
+            {/* ✅ FIXED: uses handleDownloadReport which calls downloadSummaryPdf */}
             {activePeriodId && (
-              <Button variant="outline" size="sm" className="gap-1" onClick={downloadPdfReport}>
-                <Download className="h-4 w-4" /> PDF Report
+              <Button variant="outline" size="sm" className="gap-1"
+                onClick={handleDownloadReport} disabled={downloadingReport}>
+                {downloadingReport
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <Download className="h-4 w-4" />}
+                PDF Report
               </Button>
             )}
           </div>
         </div>
 
-        {/* Summary totals strip */}
+        {/* Totals strip */}
         {filteredPayslips.length > 0 && (
           <div className="flex flex-wrap gap-5 px-4 py-3 bg-muted/40 rounded-xl border text-sm">
-            <div><span className="text-muted-foreground text-xs">Employees</span><div className="font-semibold">{filteredPayslips.length}</div></div>
-            <div><span className="text-muted-foreground text-xs">Total Gross</span><div className="font-semibold font-mono">{fmt(filteredPayslips.reduce((s, p) => s + p.gross_pay, 0))}</div></div>
-            <div><span className="text-muted-foreground text-xs">Total Net Pay</span><div className="font-semibold font-mono text-green-700">{fmt(filteredPayslips.reduce((s, p) => s + p.net_pay, 0))}</div></div>
+            <div>
+              <span className="text-muted-foreground text-xs">Employees</span>
+              <div className="font-semibold">{filteredPayslips.length}</div>
+            </div>
+            <div>
+              <span className="text-muted-foreground text-xs">Total Gross</span>
+              <div className="font-semibold font-mono">
+                {fmt(filteredPayslips.reduce((s, p) => s + p.gross_pay, 0))}
+              </div>
+            </div>
+            <div>
+              <span className="text-muted-foreground text-xs">Total Net Pay</span>
+              <div className="font-semibold font-mono text-green-700">
+                {fmt(filteredPayslips.reduce((s, p) => s + p.net_pay, 0))}
+              </div>
+            </div>
             <div className="ml-auto self-center">
-              {activePeriod && <Badge className={cn("text-xs border-0 capitalize", PERIOD_STATUS_STYLES[activePeriod.status])}>{activePeriod.status}</Badge>}
+              {activePeriod && (
+                <Badge className={cn("text-xs border-0 capitalize",
+                  PERIOD_STATUS_STYLES[activePeriod.status])}>
+                  {activePeriod.status}
+                </Badge>
+              )}
             </div>
           </div>
         )}
@@ -662,20 +766,22 @@ export default function Accounting() {
           {/* Payslips tab */}
           <TabsContent value="payslips" className="mt-4">
             {isLoading && filteredPayslips.length === 0 ? (
-              <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+              <div className="flex justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+
             ) : filteredPayslips.length === 0 && activePeriod ? (
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <p className="text-sm text-muted-foreground">
-                    No payslips generated yet for {activePeriod.label}. Click "Compute All" to generate.
+                    No payslips for {activePeriod.label} yet. Click "Compute All" to generate.
                   </p>
                   <Button onClick={handleComputeAll} disabled={computing} size="sm" className="gap-1">
                     {computing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                     Compute All
                   </Button>
                 </div>
-                
-                {/* Show all employees that would get payslips */}
+
                 <div className="rounded-xl border border-border bg-card overflow-hidden">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/30 border-b border-border">
@@ -688,66 +794,91 @@ export default function Accounting() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {employeesList.length === 0 ? (
+                      {employees.length === 0 ? (
                         <tr>
                           <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
                             No employees found. Add employees first.
                           </td>
                         </tr>
-                      ) : (
-                        employeesList.map((emp: any) => (
-                          <tr key={emp.id} className="hover:bg-muted/20">
-                            <td className="px-4 py-3 font-medium">{emp.first_name} {emp.last_name}</td>
-                            <td className="px-4 py-3 text-muted-foreground">{emp.department}</td>
-                            <td className="px-4 py-3 text-right font-mono">{fmt(emp.basic_salary)}</td>
-                            <td className="px-4 py-3 text-right font-mono text-muted-foreground">
-                              {fmt(emp.basic_salary / 2)} (est.)
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <Badge className="bg-gray-100 text-gray-600 text-xs border-0">Not Generated</Badge>
-                            </td>
-                          </tr>
-                        ))
-                      )}
+                      ) : employees.map((emp: any) => (
+                        <tr key={emp.id} className="hover:bg-muted/20">
+                          <td className="px-4 py-3 font-medium">
+                            {emp.first_name} {emp.last_name}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground">{emp.department}</td>
+                          <td className="px-4 py-3 text-right font-mono">{fmt(emp.basic_salary)}</td>
+                          <td className="px-4 py-3 text-right font-mono text-muted-foreground">
+                            {fmt(emp.basic_salary / 2)} (est.)
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <Badge className="bg-gray-100 text-gray-600 text-xs border-0">
+                              Not Generated
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
               </div>
+
             ) : filteredPayslips.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-16">
                 <FileText className="h-10 w-10 text-muted-foreground/30 mb-3" />
                 <p className="text-muted-foreground">Select a pay period first</p>
               </div>
+
             ) : (
               <div className="rounded-xl border border-border bg-card overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/30 border-b border-border">
                     <tr>
-                      <th className="px-4 py-3 font-semibold text-xs text-left">Employee</th>
-                      <th className="px-4 py-3 font-semibold text-xs text-left">Department</th>
-                      <th className="px-4 py-3 font-semibold text-xs text-center">Days Worked</th>
-                      <th className="px-4 py-3 font-semibold text-xs text-right">Gross Pay</th>
-                      <th className="px-4 py-3 font-semibold text-xs text-right">Deductions</th>
-                      <th className="px-4 py-3 font-semibold text-xs text-right">Net Pay</th>
-                      <th className="px-4 py-3 font-semibold text-xs text-left">Status</th>
-                      <th className="px-4 py-3 font-semibold text-xs text-center">Actions</th>
+                      {["Employee","Department","Days Worked","Gross Pay","Deductions","Net Pay","Status",""].map(h => (
+                        <th key={h} className={cn(
+                          "px-4 py-3 font-semibold text-xs",
+                          ["Gross Pay","Deductions","Net Pay"].includes(h) ? "text-right" : "text-left",
+                          h === "" ? "text-center" : "",
+                        )}>{h}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {filteredPayslips.map(p => (
-                      <tr key={p.id} className="hover:bg-muted/20 cursor-pointer" onClick={() => { fetchPayslip(p.id).then(() => setSlipOpen(true)); }}>
-                        <td className="px-4 py-2.5 font-medium">{p.employee?.first_name} {p.employee?.last_name}</td>
-                        <td className="px-4 py-2.5 text-muted-foreground text-xs">{p.employee?.department}</td>
-                        <td className="px-4 py-2.5 text-center">{p.days_worked}/{p.working_days_in_period}</td>
-                        <td className="px-4 py-2.5 text-right font-mono text-green-700">{fmt(p.gross_pay)}</td>
-                        <td className="px-4 py-2.5 text-right font-mono text-red-600">{fmt(p.total_deductions)}</td>
-                        <td className="px-4 py-2.5 text-right font-mono font-semibold">{fmt(p.net_pay)}</td>
-                        <td className="px-4 py-2.5">
-                          <Badge className={cn("text-xs border-0 capitalize", SLIP_STATUS_STYLES[p.status])}>{p.status}</Badge>
-                          {p.email_sent && <span className="ml-1 text-[10px] text-cyan-600">✉</span>}
+                      <tr key={p.id} className="hover:bg-muted/20 cursor-pointer"
+                        onClick={() => fetchPayslip(p.id).then(() => setSlipOpen(true))}>
+                        <td className="px-4 py-2.5 font-medium">
+                          {p.employee?.first_name} {p.employee?.last_name}
                         </td>
-                        <td className="px-4 py-2.5 text-right">
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={e => { e.stopPropagation(); fetchPayslip(p.id).then(() => setSlipOpen(true)); }}>
+                        <td className="px-4 py-2.5 text-muted-foreground text-xs">
+                          {p.employee?.department}
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          {p.days_worked}/{p.working_days_in_period}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono text-green-700">
+                          {fmt(p.gross_pay)}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono text-red-600">
+                          {fmt(p.total_deductions)}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono font-semibold">
+                          {fmt(p.net_pay)}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <Badge className={cn("text-xs border-0 capitalize",
+                            SLIP_STATUS_STYLES[p.status])}>
+                            {p.status}
+                          </Badge>
+                          {p.email_sent && (
+                            <span className="ml-1 text-[10px] text-cyan-600">✉</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
+                            onClick={e => {
+                              e.stopPropagation();
+                              fetchPayslip(p.id).then(() => setSlipOpen(true));
+                            }}>
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
                         </td>
@@ -759,8 +890,13 @@ export default function Accounting() {
             )}
           </TabsContent>
 
-          <TabsContent value="summary"  className="mt-4"><SummaryTab summary={summary} isLoading={isLoading} /></TabsContent>
-          <TabsContent value="audit"    className="mt-4"><AuditTab   logs={auditLogs}  isLoading={isLoading} /></TabsContent>
+          <TabsContent value="summary" className="mt-4">
+            <SummaryTab summary={summary} isLoading={isLoading} />
+          </TabsContent>
+
+          <TabsContent value="audit" className="mt-4">
+            <AuditTab logs={auditLogs} isLoading={isLoading} />
+          </TabsContent>
         </Tabs>
 
         {/* Payslip detail sheet */}
@@ -768,13 +904,11 @@ export default function Accounting() {
           payslip={selectedPayslip}
           open={slipOpen}
           onClose={() => { setSlipOpen(false); clearSelected(); }}
-          onApprove={async (id) => { await approvePayslip(id); }}
-          onMarkPaid={async (id) => { await markAsPaid(id); }}
+          onApprove={approvePayslip}
+          onMarkPaid={markAsPaid}
           onSendEmail={sendEmail}
           onDownloadPdf={downloadPdf}
-          onAddAdjustment={async (id, category, label, amount, note) => {
-            await addAdjustment(id, category, label, amount, note);
-          }}
+          onAddAdjustment={addAdjustment}
         />
       </div>
     </DashboardLayout>

@@ -1,309 +1,453 @@
 // src/components/employees/NewHireDetailsModal.tsx
+
 import { useState, useEffect } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { authFetch } from "@/hooks/api";
-import { Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, UserPlus } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-interface NewHireDetailsModalProps {
+interface NewHire {
+  id: number;
+  first_name: string;
+  last_name: string;
+  middle_name?: string;
+  name_extension?: string;
+  date_of_birth?: string;
+  email: string;
+  phone_number?: string;
+  home_address?: string;
+  emergency_contact_name?: string;
+  emergency_contact_number?: string;
+  relationship?: string;
+  tin?: string;
+  sss_number?: string;
+  pagibig_number?: string;
+  philhealth_number?: string;
+  bank_name?: string;
+  account_name?: string;
+  account_number?: string;
+  start_date?: string;
+  department?: string;
+  job_category?: string;
+  employment_type?: string;
+  role?: string;
+  basic_salary?: number;
+  reporting_manager?: string;
+  onboarding_status?: string;
+}
+
+interface Props {
   open: boolean;
   onClose: () => void;
-  newHireId: number;
+  newHireId: number | null;
   onSuccess: () => void;
 }
 
+type FormState = {
+  first_name: string;
+  last_name: string;
+  middle_name: string;
+  name_extension: string;
+  date_of_birth: string;
+  email: string;
+  phone_number: string;
+  home_address: string;
+  emergency_contact_name: string;
+  emergency_contact_number: string;
+  relationship: string;
+  tin: string;
+  sss_number: string;
+  pagibig_number: string;
+  philhealth_number: string;
+  bank_name: string;
+  account_name: string;
+  account_number: string;
+  start_date: string;
+  department: string;
+  job_category: string;
+  employment_type: string;
+  role: string;
+  basic_salary: string;
+  reporting_manager: string;
+  shift_sched: string;
+};
+
+const EMPTY_FORM: FormState = {
+  first_name: "", last_name: "", middle_name: "", name_extension: "",
+  date_of_birth: "", email: "", phone_number: "", home_address: "",
+  emergency_contact_name: "", emergency_contact_number: "", relationship: "",
+  tin: "", sss_number: "", pagibig_number: "", philhealth_number: "",
+  bank_name: "", account_name: "", account_number: "",
+  start_date: "", department: "", job_category: "",
+  employment_type: "probationary", role: "Employee", basic_salary: "",
+  reporting_manager: "", shift_sched: "morning",
+};
+
+const REQUIRED: (keyof FormState)[] = [
+  "first_name", "last_name", "date_of_birth", "email",
+  "phone_number", "home_address",
+  "emergency_contact_name", "emergency_contact_number", "relationship",
+  "start_date", "department", "job_category", "basic_salary", "shift_sched",
+];
+
+const FIELD_LABELS: Partial<Record<keyof FormState, string>> = {
+  first_name: "First Name", last_name: "Last Name", date_of_birth: "Date of Birth",
+  email: "Email", phone_number: "Phone Number", home_address: "Home Address",
+  emergency_contact_name: "Emergency Contact Name",
+  emergency_contact_number: "Emergency Contact Number",
+  relationship: "Relationship", start_date: "Start Date",
+  department: "Department", job_category: "Job Category",
+  basic_salary: "Basic Salary", shift_sched: "Shift Schedule",
+};
+
 const DEPARTMENTS = [
   "Human Resources", "Finance", "Front Office", "Food & Beverage",
-  "Housekeeping", "Engineering", "Security", "Sales & Marketing"
+  "Housekeeping", "Rooms Division", "Security", "Engineering",
 ];
 
-const SHIFTS = [
-  { value: "morning", label: "Morning (6AM - 2PM)" },
-  { value: "afternoon", label: "Afternoon (2PM - 10PM)" },
-  { value: "night", label: "Night (10PM - 6AM)" }
-];
+function getPct(form: FormState): number {
+  const filled = REQUIRED.filter(f => form[f] !== "" && form[f] !== null).length;
+  return Math.round((filled / REQUIRED.length) * 100);
+}
 
-export function NewHireDetailsModal({ open, onClose, newHireId, onSuccess }: NewHireDetailsModalProps) {
+function getMissing(form: FormState): (keyof FormState)[] {
+  return REQUIRED.filter(f => !form[f]);
+}
+
+function Field({ label, value, onChange, required, type = "text", placeholder, disabled }: any) {
+  return (
+    <div>
+      <label className="text-xs font-medium text-foreground/80">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      <Input
+        className="mt-1 h-9"
+        type={type}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+      />
+    </div>
+  );
+}
+
+function DateField({ label, value, onChange, required }: any) {
+  return (
+    <div>
+      <label className="text-xs font-medium text-foreground/80">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      <input
+        type="date"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
+    </div>
+  );
+}
+
+function SelectField({ label, value, onChange, required, options }: any) {
+  return (
+    <div>
+      <label className="text-xs font-medium text-foreground/80">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="mt-1 h-9">
+          <SelectValue placeholder={`Select ${label.toLowerCase()}`} />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((o: any) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+export function NewHireDetailsModal({ open, onClose, newHireId, onSuccess }: Props) {
   const { toast } = useToast();
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [formData, setFormData] = useState({
-    first_name: "",
-    last_name: "",
-    email: "",
-    phone_number: "",
-    date_of_birth: "",
-    home_address: "",
-    emergency_contact_name: "",
-    emergency_contact_number: "",
-    relationship: "",
-    department: "",
-    job_category: "",
-    shift_sched: "morning",
-    employment_type: "regular",
-    basic_salary: 25000,
-  });
+  const [fetching, setFetching] = useState(false);
+  const [activeTab, setActiveTab] = useState("personal");
 
-  // Fetch new hire data when modal opens
+  const set = (field: keyof FormState, value: string) =>
+    setForm(prev => ({ ...prev, [field]: value }));
+
+  const pct = getPct(form);
+  const missing = getMissing(form);
+  const canTransfer = pct === 100;
+
   useEffect(() => {
-    if (open && newHireId) {
-      fetchNewHireData();
-    }
+    if (!open || !newHireId) return;
+
+    setFetching(true);
+    setActiveTab("personal");
+
+    authFetch(`/api/new-hires/${newHireId}`)
+      .then(res => res.json())
+      .then(body => {
+        const nh: NewHire = body.data;
+        if (!nh) return;
+        setForm({
+          first_name: nh.first_name ?? "",
+          last_name: nh.last_name ?? "",
+          middle_name: nh.middle_name ?? "",
+          name_extension: nh.name_extension ?? "",
+          date_of_birth: nh.date_of_birth ?? "",
+          email: nh.email ?? "",
+          phone_number: nh.phone_number ?? "",
+          home_address: nh.home_address ?? "",
+          emergency_contact_name: nh.emergency_contact_name ?? "",
+          emergency_contact_number: nh.emergency_contact_number ?? "",
+          relationship: nh.relationship ?? "",
+          tin: nh.tin ?? "",
+          sss_number: nh.sss_number ?? "",
+          pagibig_number: nh.pagibig_number ?? "",
+          philhealth_number: nh.philhealth_number ?? "",
+          bank_name: nh.bank_name ?? "",
+          account_name: nh.account_name ?? "",
+          account_number: nh.account_number ?? "",
+          start_date: nh.start_date ?? "",
+          department: nh.department ?? "",
+          job_category: nh.job_category ?? "",
+          employment_type: nh.employment_type ?? "probationary",
+          role: nh.role ?? "Employee",
+          basic_salary: nh.basic_salary ? String(nh.basic_salary) : "",
+          reporting_manager: nh.reporting_manager ?? "",
+          shift_sched: "morning",
+        });
+      })
+      .catch(() => toast({ title: "Failed to load new hire data", variant: "destructive" }))
+      .finally(() => setFetching(false));
   }, [open, newHireId]);
 
-  const fetchNewHireData = async () => {
+  const handleTransfer = async () => {
+    if (!canTransfer || !newHireId) return;
+
     setLoading(true);
     try {
-      const res = await authFetch(`/api/new-hires/${newHireId}`);
-      const data = await res.json();
-      if (data.success) {
-        const nh = data.data;
-        setFormData({
-          first_name: nh.first_name || "",
-          last_name: nh.last_name || "",
-          email: nh.email || "",
-          phone_number: nh.phone_number || "",
-          date_of_birth: nh.date_of_birth || "",
-          home_address: nh.home_address || "",
-          emergency_contact_name: nh.emergency_contact_name || "",
-          emergency_contact_number: nh.emergency_contact_number || "",
-          relationship: nh.relationship || "",
-          department: nh.department || "",
-          job_category: nh.job_category || "",
-          shift_sched: nh.shift_sched || "morning",
-          employment_type: nh.employment_type || "regular",
-          basic_salary: nh.basic_salary || 25000,
-        });
-      }
-    } catch (error) {
-      console.error("Failed to fetch new hire:", error);
+      // Step 1: Save details
+      const saveRes = await authFetch(`/api/recruitment/new-hires/${newHireId}/complete-details`, {
+        method: "POST",
+        body: JSON.stringify({
+          ...form,
+          basic_salary: parseFloat(form.basic_salary),
+        }),
+      });
+      const saveBody = await saveRes.json();
+      if (!saveRes.ok) throw new Error(saveBody.message ?? "Failed to save details");
+
+      // Step 2: Transfer to employee
+      const transferRes = await authFetch(`/api/recruitment/new-hires/${newHireId}/transfer`, {
+        method: "POST",
+      });
+      const transferBody = await transferRes.json();
+      if (!transferRes.ok) throw new Error(transferBody.message ?? "Transfer failed");
+
+      toast({
+        title: "Success!",
+        description: `${form.first_name} ${form.last_name} is now an active employee.`,
+      });
+
+      onSuccess();
+      onClose();
+    } catch (e) {
+      toast({
+        title: "Transfer failed",
+        description: e instanceof Error ? e.message : "Unknown error",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async () => {
-    setSaving(true);
-    try {
-      const res = await authFetch(`/api/new-hires/${newHireId}/complete-details`, {
-        method: "PUT",
-        body: JSON.stringify(formData),
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast({ title: "Success", description: "Employee details saved!" });
-        onSuccess();
-        onClose();
-      } else {
-        toast({ title: "Error", description: data.message, variant: "destructive" });
-      }
-    } catch (error) {
-      toast({ title: "Error", description: "Failed to save details", variant: "destructive" });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <Dialog open={open} onOpenChange={onClose}>
-        <DialogContent className="max-w-2xl">
-          <div className="flex justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={v => !loading && !v && onClose()}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Complete Employee Details</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="h-5 w-5 text-green-600" />
+            Complete Employee Details
+          </DialogTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            Fill in all required fields before transferring. Once transferred, a full employee
+            profile and login account will be created automatically.
+          </p>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>First Name *</Label>
-              <Input
-                value={formData.first_name}
-                onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                required
-              />
-            </div>
-            <div>
-              <Label>Last Name *</Label>
-              <Input
-                value={formData.last_name}
-                onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                required
-              />
-            </div>
+        {fetching ? (
+          <div className="flex justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Email *</Label>
-              <Input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                required
-              />
-            </div>
-            <div>
-              <Label>Phone Number *</Label>
-              <Input
-                value={formData.phone_number}
-                onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Date of Birth *</Label>
-              <Input
-                type="date"
-                value={formData.date_of_birth}
-                onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })}
-                required
-              />
-            </div>
-            <div>
-              <Label>Department *</Label>
-              <Select
-                value={formData.department}
-                onValueChange={(v) => setFormData({ ...formData, department: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select department" />
-                </SelectTrigger>
-                <SelectContent>
-                  {DEPARTMENTS.map((dept) => (
-                    <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+        ) : (
+          <div className="space-y-4">
+            {/* Progress bar */}
+            <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium">Completion</span>
+                <span className={cn("font-semibold", pct === 100 ? "text-green-600" : "text-amber-600")}>
+                  {pct}% ({REQUIRED.length - missing.length}/{REQUIRED.length})
+                </span>
+              </div>
+              <Progress value={pct} className={cn("h-2.5", pct === 100 ? "[&>div]:bg-green-500" : "[&>div]:bg-amber-500")} />
+              {pct === 100 ? (
+                <div className="flex items-center gap-1.5 text-xs text-green-600">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  All required fields complete — ready to transfer!
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-1">
+                  {missing.map(f => (
+                    <Badge key={f} variant="outline" className="text-[10px] border-amber-300 text-amber-700 bg-amber-50">
+                      <AlertCircle className="h-2.5 w-2.5 mr-1" />
+                      {FIELD_LABELS[f] ?? f}
+                    </Badge>
                   ))}
-                </SelectContent>
-              </Select>
+                </div>
+              )}
             </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Job Category *</Label>
-              <Input
-                value={formData.job_category}
-                onChange={(e) => setFormData({ ...formData, job_category: e.target.value })}
-                required
-              />
-            </div>
-            <div>
-              <Label>Shift Schedule *</Label>
-              <Select
-                value={formData.shift_sched}
-                onValueChange={(v) => setFormData({ ...formData, shift_sched: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select shift" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SHIFTS.map((shift) => (
-                    <SelectItem key={shift.value} value={shift.value}>{shift.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="personal">Personal</TabsTrigger>
+                <TabsTrigger value="employment">Employment</TabsTrigger>
+                <TabsTrigger value="government">Gov't IDs</TabsTrigger>
+                <TabsTrigger value="banking">Banking</TabsTrigger>
+              </TabsList>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Employment Type</Label>
-              <Select
-                value={formData.employment_type}
-                onValueChange={(v) => setFormData({ ...formData, employment_type: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="regular">Regular</SelectItem>
-                  <SelectItem value="probationary">Probationary</SelectItem>
-                  <SelectItem value="contractual">Contractual</SelectItem>
-                  <SelectItem value="part_time">Part Time</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Basic Salary (₱)</Label>
-              <Input
-                type="number"
-                value={formData.basic_salary}
-                onChange={(e) => setFormData({ ...formData, basic_salary: parseFloat(e.target.value) })}
-              />
-            </div>
-          </div>
+              <TabsContent value="personal" className="rounded-xl border border-border bg-card p-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="First Name" required value={form.first_name} onChange={v => set("first_name", v)} />
+                  <Field label="Last Name" required value={form.last_name} onChange={v => set("last_name", v)} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Middle Name" value={form.middle_name} onChange={v => set("middle_name", v)} />
+                  <Field label="Name Extension" value={form.name_extension} onChange={v => set("name_extension", v)} placeholder="Jr., Sr., III" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <DateField label="Date of Birth" required value={form.date_of_birth} onChange={v => set("date_of_birth", v)} />
+                  <Field label="Email" required type="email" value={form.email} onChange={v => set("email", v)} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Phone Number" required value={form.phone_number} onChange={v => set("phone_number", v)} />
+                  <Field label="Home Address" required value={form.home_address} onChange={v => set("home_address", v)} />
+                </div>
+                <div className="pt-2 border-t border-border">
+                  <p className="text-xs font-semibold mb-3">Emergency Contact</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <Field label="Contact Name" required value={form.emergency_contact_name} onChange={v => set("emergency_contact_name", v)} />
+                    <Field label="Contact Number" required value={form.emergency_contact_number} onChange={v => set("emergency_contact_number", v)} />
+                    <Field label="Relationship" required value={form.relationship} onChange={v => set("relationship", v)} />
+                  </div>
+                </div>
+              </TabsContent>
 
-          <div>
-            <Label>Home Address *</Label>
-            <Input
-              value={formData.home_address}
-              onChange={(e) => setFormData({ ...formData, home_address: e.target.value })}
-              required
-            />
-          </div>
+              <TabsContent value="employment" className="rounded-xl border border-border bg-card p-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <SelectField
+                    label="Department" required
+                    value={form.department}
+                    onChange={v => set("department", v)}
+                    options={DEPARTMENTS.map(d => ({ value: d, label: d }))}
+                  />
+                  <Field label="Job Category" required value={form.job_category} onChange={v => set("job_category", v)} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <SelectField
+                    label="Shift Schedule" required
+                    value={form.shift_sched}
+                    onChange={v => set("shift_sched", v)}
+                    options={[
+                      { value: "morning", label: "Morning (6AM - 2PM)" },
+                      { value: "afternoon", label: "Afternoon (2PM - 10PM)" },
+                      { value: "night", label: "Night (10PM - 6AM)" },
+                    ]}
+                  />
+                  <SelectField
+                    label="Employment Type"
+                    value={form.employment_type}
+                    onChange={v => set("employment_type", v)}
+                    options={[
+                      { value: "regular", label: "Regular" },
+                      { value: "probationary", label: "Probationary" },
+                      { value: "contractual", label: "Contractual" },
+                      { value: "part_time", label: "Part-time" },
+                      { value: "intern", label: "Intern" },
+                    ]}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <DateField label="Start Date" required value={form.start_date} onChange={v => set("start_date", v)} />
+                  <div>
+                    <label className="text-xs font-medium">Basic Salary (₱) *</label>
+                    <Input
+                      className="mt-1 h-9"
+                      type="number"
+                      value={form.basic_salary}
+                      onChange={e => set("basic_salary", e.target.value)}
+                      placeholder="e.g. 25000"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <SelectField
+                    label="System Role"
+                    value={form.role}
+                    onChange={v => set("role", v)}
+                    options={[
+                      { value: "Employee", label: "Employee" },
+                      { value: "HR", label: "HR" },
+                      { value: "Accountant", label: "Accountant" },
+                      { value: "Manager", label: "Manager" },
+                      { value: "Admin", label: "Admin" },
+                    ]}
+                  />
+                  <Field label="Reporting Manager" value={form.reporting_manager} onChange={v => set("reporting_manager", v)} />
+                </div>
+              </TabsContent>
 
-          <div className="border-t pt-4">
-            <h3 className="font-semibold mb-3">Emergency Contact</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Contact Name *</Label>
-                <Input
-                  value={formData.emergency_contact_name}
-                  onChange={(e) => setFormData({ ...formData, emergency_contact_name: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Contact Number *</Label>
-                <Input
-                  value={formData.emergency_contact_number}
-                  onChange={(e) => setFormData({ ...formData, emergency_contact_number: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Relationship *</Label>
-                <Input
-                  value={formData.relationship}
-                  onChange={(e) => setFormData({ ...formData, relationship: e.target.value })}
-                />
-              </div>
-            </div>
+              <TabsContent value="government" className="rounded-xl border border-border bg-card p-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="TIN" value={form.tin} onChange={v => set("tin", v)} />
+                  <Field label="SSS Number" value={form.sss_number} onChange={v => set("sss_number", v)} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="PhilHealth" value={form.philhealth_number} onChange={v => set("philhealth_number", v)} />
+                  <Field label="Pag-IBIG" value={form.pagibig_number} onChange={v => set("pagibig_number", v)} />
+                </div>
+              </TabsContent>
+
+              <TabsContent value="banking" className="rounded-xl border border-border bg-card p-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Bank Name" value={form.bank_name} onChange={v => set("bank_name", v)} />
+                  <Field label="Account Name" value={form.account_name} onChange={v => set("account_name", v)} />
+                </div>
+                <Field label="Account Number" value={form.account_number} onChange={v => set("account_number", v)} />
+              </TabsContent>
+            </Tabs>
           </div>
-        </div>
+        )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={saving} className="bg-blue-600 hover:bg-blue-700">
-            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Save & Transfer to Employee
+          <Button variant="outline" onClick={onClose} disabled={loading}>Cancel</Button>
+          <Button
+            onClick={handleTransfer}
+            disabled={!canTransfer || loading || fetching}
+            className={cn(canTransfer ? "bg-green-600 hover:bg-green-700" : "opacity-60")}
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
+            {loading ? "Transferring..." : "Transfer to Employee"}
           </Button>
         </DialogFooter>
       </DialogContent>

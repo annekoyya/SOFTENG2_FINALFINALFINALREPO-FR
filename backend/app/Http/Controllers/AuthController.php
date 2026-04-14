@@ -13,7 +13,6 @@ use Illuminate\Validation\ValidationException;
 class AuthController extends Controller
 {
     /**
-     * Register a new user.
      * POST /api/auth/register
      */
     public function register(Request $request): JsonResponse
@@ -25,7 +24,7 @@ class AuthController extends Controller
             'role'     => 'sometimes|in:Employee,HR,Manager,Accountant,Admin',
         ]);
 
-        $user  = User::create([
+        $user = User::create([
             'name'     => $validated['name'],
             'email'    => $validated['email'],
             'password' => Hash::make($validated['password']),
@@ -34,68 +33,88 @@ class AuthController extends Controller
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        return $this->created([
-            'user'         => $this->formatUser($user),
-            'token'        => $token,
-            'token_type'   => 'Bearer',
-        ], 'Account created successfully');
+        return response()->json([
+            'success' => true,
+            'message' => 'Account created successfully',
+            'data'    => [
+                'user'       => $this->formatUser($user),
+                'token'      => $token,
+                'token_type' => 'Bearer',
+            ]
+        ], 201);
     }
 
     /**
-     * Log in an existing user and issue a Sanctum token.
      * POST /api/auth/login
      */
     public function login(Request $request): JsonResponse
     {
+        // Force JSON response (prevents redirect + CSRF issues)
+        if (!$request->expectsJson()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid request type'
+            ], 400);
+        }
+
         $validated = $request->validate([
             'email'    => 'required|email',
             'password' => 'required|string',
         ]);
 
-        if (!Auth::attempt(['email' => $validated['email'], 'password' => $validated['password']])) {
-            throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
-            ]);
+        if (!Auth::attempt($validated)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid credentials'
+            ], 401);
         }
 
         /** @var User $user */
         $user = Auth::user();
 
-        // Revoke all previous tokens for this user (single-session enforcement)
+        // Optional: single session only
         $user->tokens()->delete();
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        return $this->success([
-            'user'       => $this->formatUser($user),
-            'token'      => $token,
-            'token_type' => 'Bearer',
-        ], 'Login successful');
+        return response()->json([
+            'success' => true,
+            'message' => 'Login successful',
+            'data'    => [
+                'user'       => $this->formatUser($user),
+                'token'      => $token,
+                'token_type' => 'Bearer',
+            ]
+        ]);
     }
 
     /**
-     * Log out — revoke the current token.
      * POST /api/auth/logout
      */
     public function logout(Request $request): JsonResponse
     {
-        // Delete only the token used in this request
-        $request->user()->currentAccessToken()->delete();
+        if ($request->user()?->currentAccessToken()) {
+            $request->user()->currentAccessToken()->delete();
+        }
 
-        return $this->success(null, 'Logged out successfully');
+        return response()->json([
+            'success' => true,
+            'message' => 'Logged out successfully'
+        ]);
     }
 
     /**
-     * Get the currently authenticated user.
      * GET /api/auth/me
      */
     public function me(Request $request): JsonResponse
     {
-        return $this->success($this->formatUser($request->user()));
+        return response()->json([
+            'success' => true,
+            'data'    => $this->formatUser($request->user())
+        ]);
     }
 
     /**
-     * Change the authenticated user's password.
      * POST /api/auth/change-password
      */
     public function changePassword(Request $request): JsonResponse
@@ -109,24 +128,27 @@ class AuthController extends Controller
         $user = $request->user();
 
         if (!Hash::check($validated['current_password'], $user->password)) {
-            throw ValidationException::withMessages([
-                'current_password' => ['The current password is incorrect.'],
-            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Current password is incorrect'
+            ], 422);
         }
 
-        $user->update(['password' => Hash::make($validated['password'])]);
+        $user->update([
+            'password' => Hash::make($validated['password'])
+        ]);
 
-        // Revoke all tokens — force re-login on all devices
+        // Force logout everywhere
         $user->tokens()->delete();
 
-        return $this->success(null, 'Password changed successfully. Please log in again.');
+        return response()->json([
+            'success' => true,
+            'message' => 'Password changed. Please log in again.'
+        ]);
     }
 
-    // ─── Private Helpers ──────────────────────────────────────────────────────
+    // ─── Helpers ─────────────────────────
 
-    /**
-     * Return a clean user payload (never expose password hash).
-     */
     private function formatUser(User $user): array
     {
         return [

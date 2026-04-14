@@ -1,30 +1,34 @@
-/**
- * src/hooks/api.ts
- *
- * Central authenticated fetch helper.
- * All hooks (useEmployees, usePayroll, useAttendance) import authFetch from HERE.
- * This avoids any circular dependency with useAuth.ts.
- */
+// src/hooks/api.ts
+const API_BASE_URL = '';
 
-const TOKEN_KEY = "hr_auth_token";
+export const authFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
+  const token = localStorage.getItem("hr_auth_token");
 
-/**
- * A drop-in replacement for fetch() that automatically attaches
- * the stored Bearer token to every request.
- */
-export const authFetch = async (
-  url: string,
-  options: RequestInit = {}
-): Promise<Response> => {
-  const token = localStorage.getItem(TOKEN_KEY);
+  const isFormData = options.body instanceof FormData;
 
-  return fetch(url, {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(!isFormData ? { "Content-Type": "application/json" } : {}),
+  };
+
+  // Use relative URL (Vite proxy will handle it)
+  const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+
+  const response = await fetch(fullUrl, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers ?? {}),
+      ...headers,
+      ...(options.headers as Record<string, string>),
     },
   });
+
+  if (response.status === 401) {
+    localStorage.removeItem("hr_auth_token");
+    localStorage.removeItem("hr_auth_user");
+    window.location.href = "/login";
+    throw new Error("Session expired. Please log in again.");
+  }
+
+  return response;
 };

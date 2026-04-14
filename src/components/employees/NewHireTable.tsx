@@ -1,238 +1,304 @@
-// src/components/employees/NewHireTable.tsx
-import { useEffect, useState } from "react";
+// src/components/employees/NewHireDetailsModal.tsx
+import { useState, useEffect } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Plus, Edit, Trash2, UserCheck, Loader2, UserPlus } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { useNewHires, getCompletionPct, type NewHire } from "@/hooks/useNewHires";
-import { useAuth } from "@/hooks/useAuth";
-import { NewHireForm } from "@/components/employees/NewHireForm";
-import { NewHireDetailsModal } from "@/components/employees/NewHireDetailsModal";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { authFetch } from "@/hooks/api";
+import { Loader2 } from "lucide-react";
 
-interface Props {
-  onBack: () => void;
-  onTransferred: () => void; // Refresh employee list after transfer
+interface NewHire {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone_number: string | null;
+  department: string | null;
+  job_category: string | null;
+  start_date: string | null;
+  basic_salary: number | null;
+  date_of_birth: string | null;
+  home_address: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_number: string | null;
+  relationship: string | null;
 }
 
-type View = "list" | "create" | "edit";
+interface NewHireDetailsModalProps {
+  open: boolean;
+  onClose: () => void;
+  newHireId: number;
+  onSuccess: () => void;
+}
 
-export function NewHireTable({ onBack, onTransferred }: Props) {
-  const { toast }                   = useToast();
-  const { isAdmin, isHR }           = useAuth();
-  const {
-    newHires, isLoading, transferMessage,
-    fetchNewHires, createNewHire, updateNewHire, deleteNewHire,
-    clearTransferMessage,
-  } = useNewHires();
+const DEPARTMENTS = [
+  "Human Resources", "Finance", "Front Office", "Food & Beverage",
+  "Housekeeping", "Rooms Division", "Security", "Engineering", "Maintenance"
+];
 
-  const [view, setView]               = useState<View>("list");
-  const [selected, setSelected]       = useState<NewHire | null>(null);
-  const [deletingId, setDeletingId]   = useState<number | null>(null);
-  const [modalOpen, setModalOpen]     = useState(false);
-  const [selectedNewHireId, setSelectedNewHireId] = useState<number | null>(null);
+const JOB_CATEGORIES = [
+  "Manager", "Supervisor", "Staff", "Associate", "Intern", "Trainee",
+  "Receptionist", "Housekeeper", "Waiter", "Cook", "Accountant", "HR Specialist",
+  "Security Guard", "Security Supervisor", "Maintenance Staff"
+];
 
-  const canManage = isAdmin() || isHR();
+const SHIFT_SCHEDULES = [
+  { value: "morning", label: "Morning (6:00 AM - 2:00 PM)" },
+  { value: "afternoon", label: "Afternoon (2:00 PM - 10:00 PM)" },
+  { value: "night", label: "Night (10:00 PM - 6:00 AM)" }
+];
 
-  useEffect(() => { fetchNewHires(); }, []);
+const EMPLOYMENT_TYPES = [
+  { value: "regular", label: "Regular" },
+  { value: "probationary", label: "Probationary" },
+  { value: "contractual", label: "Contractual" },
+  { value: "part_time", label: "Part Time" },
+  { value: "intern", label: "Intern" }
+];
 
-  // Show transfer toast whenever message changes
+export function NewHireDetailsModal({ open, onClose, newHireId, onSuccess }: NewHireDetailsModalProps) {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [newHire, setNewHire] = useState<NewHire | null>(null);
+  
+  const [formData, setFormData] = useState({
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone_number: "",
+    date_of_birth: "",
+    home_address: "",
+    emergency_contact_name: "",
+    emergency_contact_number: "",
+    relationship: "",
+    department: "",
+    job_category: "",
+    shift_sched: "morning",
+    employment_type: "probationary",
+    basic_salary: 0,
+  });
+
   useEffect(() => {
-    if (!transferMessage) return;
-    const isTransfer = transferMessage.includes("transferred");
-    toast({
-      title: isTransfer ? "🎉 Transferred to Employees!" : "Saved",
-      description: transferMessage,
-      variant: isTransfer ? "default" : "default",
-    });
-    if (isTransfer) onTransferred();
-    clearTransferMessage();
-  }, [transferMessage]);
+    if (open && newHireId) {
+      fetchNewHireDetails();
+    }
+  }, [open, newHireId]);
 
-  const handleCreate = async (data: Parameters<typeof createNewHire>[0]) => {
-    await createNewHire(data);
-    setView("list");
-  };
-
-  const handleUpdate = async (data: Parameters<typeof updateNewHire>[1]) => {
-    if (!selected) return;
-    await updateNewHire(selected.id, data);
-    setView("list");
-    setSelected(null);
-  };
-
-  const handleDelete = async (hire: NewHire) => {
-    setDeletingId(hire.id);
+  const fetchNewHireDetails = async () => {
+    setLoading(true);
     try {
-      await deleteNewHire(hire.id);
-      toast({ title: "Deleted", description: `${hire.first_name} ${hire.last_name} removed.` });
-    } finally { setDeletingId(null); }
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/new-hires/${newHireId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.success) {
+        const nh = data.data;
+        setNewHire(nh);
+        setFormData({
+          first_name: nh.first_name || "",
+          last_name: nh.last_name || "",
+          email: nh.email || "",
+          phone_number: nh.phone_number || "",
+          date_of_birth: nh.date_of_birth || "",
+          home_address: nh.home_address || "",
+          emergency_contact_name: nh.emergency_contact_name || "",
+          emergency_contact_number: nh.emergency_contact_number || "",
+          relationship: nh.relationship || "",
+          department: nh.department || "",
+          job_category: nh.job_category || "",
+          shift_sched: "morning",
+          employment_type: "probationary",
+          basic_salary: nh.basic_salary || 0,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch new hire:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleTransferClick = (hire: NewHire) => {
-    setSelectedNewHireId(hire.id);
-    setModalOpen(true);
+  const handleSubmit = async () => {
+    if (!formData.first_name || !formData.last_name || !formData.email) {
+      toast({ title: "Please fill all required fields", variant: "destructive" });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      // ✅ FIXED: Use the correct endpoint
+      const response = await authFetch(`/api/new-hires/${newHireId}/complete-details`, {
+        method: 'PUT',
+        body: JSON.stringify(formData),
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        toast({ title: "Success!", description: "Employee has been transferred successfully!" });
+        onSuccess();
+        onClose();
+      } else {
+        toast({ title: "Error", description: data.message, variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to transfer employee", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleTransferSuccess = () => {
-    fetchNewHires();
-    onTransferred();
-  };
-
-  if (view === "create" || view === "edit") {
+  if (loading) {
     return (
-      <NewHireForm
-        initialData={view === "edit" ? selected ?? undefined : undefined}
-        onSave={view === "create" ? handleCreate : handleUpdate}
-        onCancel={() => { setView("list"); setSelected(null); }}
-        isLoading={isLoading}
-      />
+      <Dialog open={open} onOpenChange={onClose}>
+        <DialogContent className="max-w-2xl">
+          <div className="flex justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        </DialogContent>
+      </Dialog>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={onBack} className="gap-1">
-            <ArrowLeft className="h-4 w-4" /> Back to Employees
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-xl">Complete Employee Details</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Please fill in all required information for {newHire?.first_name} {newHire?.last_name}
+          </p>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          {/* Basic Info */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>First Name *</Label>
+              <Input value={formData.first_name} onChange={(e) => setFormData({...formData, first_name: e.target.value})} />
+            </div>
+            <div>
+              <Label>Last Name *</Label>
+              <Input value={formData.last_name} onChange={(e) => setFormData({...formData, last_name: e.target.value})} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Email *</Label>
+              <Input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
+            </div>
+            <div>
+              <Label>Phone Number *</Label>
+              <Input value={formData.phone_number} onChange={(e) => setFormData({...formData, phone_number: e.target.value})} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Date of Birth *</Label>
+              <Input type="date" value={formData.date_of_birth} onChange={(e) => setFormData({...formData, date_of_birth: e.target.value})} />
+            </div>
+            <div>
+              <Label>Basic Salary (₱) *</Label>
+              <Input type="number" value={formData.basic_salary} onChange={(e) => setFormData({...formData, basic_salary: parseFloat(e.target.value)})} />
+            </div>
+          </div>
+
+          <div>
+            <Label>Home Address *</Label>
+            <Input value={formData.home_address} onChange={(e) => setFormData({...formData, home_address: e.target.value})} />
+          </div>
+
+          {/* Emergency Contact */}
+          <div className="border-t pt-4">
+            <h3 className="font-semibold mb-3">Emergency Contact</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label>Contact Name *</Label>
+                <Input value={formData.emergency_contact_name} onChange={(e) => setFormData({...formData, emergency_contact_name: e.target.value})} />
+              </div>
+              <div>
+                <Label>Contact Number *</Label>
+                <Input value={formData.emergency_contact_number} onChange={(e) => setFormData({...formData, emergency_contact_number: e.target.value})} />
+              </div>
+              <div>
+                <Label>Relationship *</Label>
+                <Input value={formData.relationship} onChange={(e) => setFormData({...formData, relationship: e.target.value})} />
+              </div>
+            </div>
+          </div>
+
+          {/* Employment Details */}
+          <div className="border-t pt-4">
+            <h3 className="font-semibold mb-3">Employment Details</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Department *</Label>
+                <Select value={formData.department} onValueChange={(v) => setFormData({...formData, department: v})}>
+                  <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
+                  <SelectContent>
+                    {DEPARTMENTS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Job Category *</Label>
+                <Select value={formData.job_category} onValueChange={(v) => setFormData({...formData, job_category: v})}>
+                  <SelectTrigger><SelectValue placeholder="Select job category" /></SelectTrigger>
+                  <SelectContent>
+                    {JOB_CATEGORIES.map(j => <SelectItem key={j} value={j}>{j}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <div>
+                <Label>Shift Schedule *</Label>
+                <Select value={formData.shift_sched} onValueChange={(v) => setFormData({...formData, shift_sched: v})}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SHIFT_SCHEDULES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Employment Type *</Label>
+                <Select value={formData.employment_type} onValueChange={(v) => setFormData({...formData, employment_type: v})}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {EMPLOYMENT_TYPES.map(e => <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={submitting} className="bg-green-600 hover:bg-green-700">
+            {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Complete & Transfer
           </Button>
-          <div className="h-4 w-px bg-border" />
-          <h2 className="font-semibold text-lg">New Hires</h2>
-          <Badge variant="secondary">{newHires.length}</Badge>
-        </div>
-        {canManage && (
-          <Button onClick={() => setView("create")} className="gap-2">
-            <Plus className="h-4 w-4" /> Add New Hire
-          </Button>
-        )}
-      </div>
-
-      {/* Info banner */}
-      <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
-        <span className="font-medium">Complete Details:</span> Click "Transfer" to fill in employee details and complete the onboarding process.
-      </div>
-
-      {/* Table */}
-      {isLoading && newHires.length === 0 ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      ) : newHires.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
-          <UserCheck className="mb-3 h-10 w-10 text-muted-foreground/40" />
-          <p className="font-medium text-muted-foreground">No pending new hires</p>
-          {canManage && (
-            <Button className="mt-4" onClick={() => setView("create")}>
-              <Plus className="mr-2 h-4 w-4" /> Add New Hire
-            </Button>
-          )}
-        </div>
-      ) : (
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/30">
-              <tr>
-                <th className="px-4 py-3 text-left font-semibold">Name</th>
-                <th className="px-4 py-3 text-left font-semibold">Email</th>
-                <th className="px-4 py-3 text-left font-semibold">Department</th>
-                <th className="px-4 py-3 text-left font-semibold">Start Date</th>
-                <th className="px-4 py-3 text-left font-semibold">Completion</th>
-                <th className="px-4 py-3 text-left font-semibold">Status</th>
-                <th className="px-4 py-3 text-right font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {newHires.map(hire => {
-                const pct = getCompletionPct(hire);
-                const isReady = hire.onboarding_status === "complete" || pct === 100;
-                
-                return (
-                  <tr key={hire.id} className="hover:bg-muted/20 transition-colors">
-                    <td className="px-4 py-3">
-                      <p className="font-medium">
-                        {hire.first_name} {hire.last_name}
-                        {hire.name_extension ? ` ${hire.name_extension}` : ""}
-                      </p>
-                      {hire.job_category && (
-                        <p className="text-xs text-muted-foreground">{hire.job_category}</p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">{hire.email}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{hire.department ?? "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {hire.start_date
-                        ? new Date(hire.start_date).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="space-y-1">
-                        <Progress value={pct} className={cn("h-2 w-32", pct === 100 ? "[&>div]:bg-green-500" : "")} />
-                        <p className="text-xs text-muted-foreground">{pct}% complete</p>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge className={cn("text-xs border", {
-                        "bg-amber-100 text-amber-800 border-amber-200": hire.onboarding_status === "pending",
-                        "bg-green-100 text-green-800 border-green-200": hire.onboarding_status === "complete",
-                      })}>
-                        {hire.onboarding_status === "pending" ? "Incomplete" : "Ready"}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        {canManage && (
-                          <>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0"
-                              onClick={() => { setSelected(hire); setView("edit"); }}
-                              title="Edit">
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            {/* Transfer Button - only show when ready */}
-                            {isReady && (
-                              <Button 
-                                size="sm" 
-                                className="h-8 px-3 bg-green-600 hover:bg-green-700 text-white"
-                                onClick={() => handleTransferClick(hire)}
-                                title="Transfer to Employee"
-                              >
-                                <UserPlus className="h-4 w-4 mr-1" />
-                                Transfer
-                              </Button>
-                            )}
-                            <Button variant="ghost" size="sm"
-                              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                              onClick={() => handleDelete(hire)}
-                              disabled={deletingId === hire.id}
-                              title="Delete">
-                              {deletingId === hire.id
-                                ? <Loader2 className="h-4 w-4 animate-spin" />
-                                : <Trash2 className="h-4 w-4" />}
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Transfer Modal */}
-      <NewHireDetailsModal
-        open={modalOpen}
-        onClose={() => {
-          setModalOpen(false);
-          setSelectedNewHireId(null);
-        }}
-        newHireId={selectedNewHireId!}
-        onSuccess={handleTransferSuccess}
-      />
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -11,7 +11,7 @@ export default function Login() {
   const { login, isLoading, error, clearError } = useAuth();
   const navigate = useNavigate();
 
-  const [email, setEmail]       = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -21,8 +21,8 @@ export default function Login() {
     try {
       await login(email, password);
       navigate("/");
-    } catch {
-      // error already set in useAuth
+    } catch (err) {
+      console.error("Login error:", err);
     }
   };
 
@@ -31,11 +31,9 @@ export default function Login() {
       className="min-h-screen flex items-center justify-center px-4 bg-cover bg-center bg-no-repeat"
       style={{ backgroundImage: `url(${hotelBg})` }}
     >
-      {/* Overlay for better text readability */}
       <div className="absolute inset-0 bg-black/50" />
       
       <div className="w-full max-w-sm space-y-6 relative z-10">
-        {/* Branding */}
         <div className="text-center">
           <h1 className="font-display text-4xl font-bold text-white">
             Blue Lotus
@@ -55,10 +53,7 @@ export default function Login() {
           <CardContent>
             <form onSubmit={handleSubmit} noValidate className="space-y-4">
               <div className="space-y-1">
-                <label
-                  htmlFor="email"
-                  className="text-sm font-medium text-foreground"
-                >
+                <label htmlFor="email" className="text-sm font-medium text-foreground">
                   Email
                 </label>
                 <input
@@ -76,10 +71,7 @@ export default function Login() {
               </div>
 
               <div className="space-y-1">
-                <label
-                  htmlFor="password"
-                  className="text-sm font-medium text-foreground"
-                >
+                <label htmlFor="password" className="text-sm font-medium text-foreground">
                   Password
                 </label>
                 <input
@@ -124,18 +116,17 @@ export default function Login() {
               </Button>
             </form>
 
-            {/* Test credentials */}
             <div className="mt-4 rounded-md bg-muted p-3 space-y-1">
               <p className="text-xs font-semibold text-muted-foreground">
                 Test Credentials
               </p>
               <div className="space-y-1">
                 {[
-                  { role: "Admin",      email: "admin@hrharmony.com",      pass: "Admin@1234" },
-                  { role: "HR",         email: "hr@hrharmony.com",         pass: "Hr@12345"   },
-                  { role: "Accountant", email: "accountant@hrharmony.com", pass: "Account@1"  },
-                  { role: "Manager",    email: "manager@hrharmony.com",    pass: "Manager@1"  },
-                  { role: "Employee",   email: "employee@hrharmony.com",   pass: "Employee@1" },
+                  { role: "Admin", email: "admin@hrharmony.com", pass: "Admin@1234" },
+                  { role: "HR", email: "hr@hrharmony.com", pass: "Hr@12345" },
+                  { role: "Accountant", email: "accountant@hrharmony.com", pass: "Account@1" },
+                  { role: "Manager", email: "manager@hrharmony.com", pass: "Manager@1" },
+                  { role: "Employee", email: "employee@hrharmony.com", pass: "Employee@1" },
                 ].map(({ role, email: e, pass }) => (
                   <button
                     key={role}
