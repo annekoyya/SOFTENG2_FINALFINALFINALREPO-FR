@@ -127,38 +127,43 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // ── Recruitment ───────────────────────────────────────────────────────
-    Route::prefix('recruitment')->group(function () {
-        Route::get('/job-postings',                              [RecruitmentController::class, 'getJobPostings']);
-        Route::post('/job-postings',                             [RecruitmentController::class, 'createJobPosting']);
-        Route::put('/job-postings/{id}',                         [RecruitmentController::class, 'updateJobPosting']);
-        Route::delete('/job-postings/{id}',                      [RecruitmentController::class, 'deleteJobPosting']);
+   // Inside Route::middleware('auth:sanctum')->group(function () {
 
-        Route::get('/applicants',                                [RecruitmentController::class, 'getApplicants']);
-        Route::post('/applicants',                               [RecruitmentController::class, 'createApplicant']);
-        Route::patch('/applicants/{id}/stage',                   [RecruitmentController::class, 'updateApplicantStage']);
-        Route::post('/applicants/{id}/hire',                     [RecruitmentController::class, 'hireApplicant']);
-        Route::post('/applicants/{id}/reject',                   [RecruitmentController::class, 'rejectApplicant']);
+Route::prefix('recruitment')->group(function () {
+    // Job Postings
+    Route::get('/job-postings', [RecruitmentController::class, 'getJobPostings']);
+    Route::post('/job-postings', [RecruitmentController::class, 'createJobPosting']);
+    Route::put('/job-postings/{id}', [RecruitmentController::class, 'updateJobPosting']);
+    Route::delete('/job-postings/{id}', [RecruitmentController::class, 'deleteJobPosting']);
 
-        Route::get('/interviews',                                [RecruitmentController::class, 'getInterviews']);
-        Route::post('/interviews',                               [RecruitmentController::class, 'scheduleInterview']);
-        Route::patch('/interviews/{id}/status',                  [RecruitmentController::class, 'updateInterviewStatus']);
-        Route::post('/interviews/{id}/complete',                 [RecruitmentController::class, 'completeInterview']);
+    // Applicants
+    Route::get('/applicants', [RecruitmentController::class, 'getApplicants']);
+    Route::post('/applicants', [RecruitmentController::class, 'createApplicant']);
+    Route::patch('/applicants/{id}/stage', [RecruitmentController::class, 'updateApplicantStage']);
+    Route::post('/applicants/{id}/hire', [RecruitmentController::class, 'hireApplicant']);
+    Route::post('/applicants/{id}/reject', [RecruitmentController::class, 'rejectApplicant']);
 
-        Route::get('/trainings',                                 [RecruitmentController::class, 'getTrainings']);
-        Route::post('/trainings',                                [RecruitmentController::class, 'createTraining']);
-        Route::delete('/trainings/{id}',                         [RecruitmentController::class, 'deleteTraining']);
-        Route::post('/trainings/assign',                         [RecruitmentController::class, 'assignTraining']);
-        Route::get('/training-assignments',                      [RecruitmentController::class, 'getTrainingAssignments']);
-        Route::patch('/training-assignments/{id}/status',        [RecruitmentController::class, 'updateTrainingStatus']);
-        Route::post('/training-assignments/{id}/assign-trainer', [RecruitmentController::class, 'assignTrainer']);
-        Route::post('/training-assignments/{id}/complete',       [RecruitmentController::class, 'completeTraining']);
+    // Interviews
+    Route::get('/interviews', [RecruitmentController::class, 'getInterviews']);
+    Route::post('/interviews', [RecruitmentController::class, 'scheduleInterview']);
+    Route::patch('/interviews/{id}/status', [RecruitmentController::class, 'updateInterviewStatus']);
+    Route::post('/interviews/{id}/complete', [RecruitmentController::class, 'completeInterview']);
 
-       
-          Route::get('/new-hires',                                  [RecruitmentController::class, 'getNewHires']);
-    // ✅ NEW — save details before transfer
-    Route::post('/new-hires/{id}/complete-details',           [RecruitmentController::class, 'completeNewHireDetails']);
-    Route::post('/new-hires/{id}/transfer',                   [RecruitmentController::class, 'transferToEmployee']);
-    });
+    // Trainings
+    Route::get('/trainings', [RecruitmentController::class, 'getTrainings']);
+    Route::post('/trainings', [RecruitmentController::class, 'createTraining']);
+    Route::delete('/trainings/{id}', [RecruitmentController::class, 'deleteTraining']);
+    Route::post('/trainings/assign', [RecruitmentController::class, 'assignTraining']);
+    Route::get('/training-assignments', [RecruitmentController::class, 'getTrainingAssignments']);
+    Route::patch('/training-assignments/{id}/status', [RecruitmentController::class, 'updateTrainingStatus']);
+    Route::post('/training-assignments/{id}/assign-trainer', [RecruitmentController::class, 'assignTrainer']);
+    Route::post('/training-assignments/{id}/complete', [RecruitmentController::class, 'completeTraining']);
+
+    // New Hires
+    Route::get('/new-hires', [RecruitmentController::class, 'getNewHires']);
+    Route::post('/new-hires/{id}/complete-details', [RecruitmentController::class, 'completeNewHireDetails']);
+    Route::post('/new-hires/{id}/transfer', [RecruitmentController::class, 'transferToEmployee']);
+});  // ← This closes the recruitment prefix group
 
     // ── Performance ───────────────────────────────────────────────────────
     Route::prefix('performance')->group(function () {
@@ -176,13 +181,15 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // ── New Hires (standalone CRUD via NewHireController) ─────────────────
-    Route::prefix('new-hires')->group(function () {
-        Route::get('/',           [NewHireController::class, 'index']);
-        Route::post('/',          [NewHireController::class, 'store']);
-        Route::get('/{newHire}',  [NewHireController::class, 'show']);
-        Route::put('/{newHire}',  [NewHireController::class, 'update']);
-        Route::delete('/{newHire}', [NewHireController::class, 'destroy']);
-    });
+// Separate new-hires routes (if you have NewHireController)
+Route::prefix('new-hires')->group(function () {
+    Route::get('/', [NewHireController::class, 'index']);
+    Route::post('/', [NewHireController::class, 'store']);
+    Route::get('/{newHire}', [NewHireController::class, 'show']);
+    Route::put('/{newHire}', [NewHireController::class, 'update']);
+    Route::delete('/{newHire}', [NewHireController::class, 'destroy']);
+    Route::post('/{id}/transfer', [RecruitmentController::class, 'transferToEmployee']); // Add this line
+});
 
     // ── Users ─────────────────────────────────────────────────────────────
     Route::get('/users', function (\Illuminate\Http\Request $request) {
