@@ -2842,3 +2842,74 @@ php artisan config:clear && php artisan route:clear && php artisan cache:clear
 | 17 | `getInterviewers()` returns only HR users; `scheduleInterview()` enforces HR role server-side |
 | 18 | `completeTraining()` null-checks all optional fields before NewHire::create, uses safe defaults |
 | 19 | `hireApplicant()` and `rejectApplicant()` return 403 for non-Admin users |
+
+
+
+---
+fix and send the whole revised code and full complete in code blocks do not send in file fomat 
+
+6. ATTENDANCE - Live dashboard doesn't work
+
+Issue: Live status shows no data or errors.
+
+Files needed: `Attendance.tsx`, `AttendanceController.php`
+
+7. ATTENDANCE - Export CSV doesn't work
+
+Issue: Export button doesn't download file.
+
+Files needed: `Attendance.tsx`, `AttendanceController.php` (export method)
+
+8. ATTENDANCE - Connect to employee shift (late calculation per shift)
+
+Issue: Late calculation uses fixed time instead of employee's shift schedule.
+
+Files needed: `AttendanceController.php`, `Attendance.tsx`
+
+9. ATTENDANCE - Leave request error & approval permissions
+
+Issue: Creating leave request gives error. HR should create, Admin approves.
+
+Files needed: `LeaveController.php`, `Attendance.tsx`, `LeaveRequest` model
+
+10. PAYROLL - Admin vs Accounting views
+
+Issue:
+
+
+
+* Admin should see: Approve All → Email Payslips
+
+* Accountant should see: Select Period → Compute → Email Payslips
+
+Files needed: `Accounting.tsx`, `useAccounting.ts`, `PayslipController.php`
+
+11. PAYROLL - PDF generation per employee doesn't work
+
+Issue: Individual payslip PDF download fails.
+
+Files needed: `PayslipController.php` (downloadPdf method), `PayslipService.php`
+
+12. EVALUATION - Only HR should be evaluators
+
+Issue: Non-HR users can be assigned as evaluators.
+
+Files needed: `EvaluationFormBuilder.tsx`, `EvaluationFormController.php`
+
+13. EVALUATION - Active evaluations: remove edit option
+
+Issue: Active evaluations still show Edit button.
+
+Files needed: `Performance.tsx`, `EvaluationFormBuilder.tsx`
+
+14. EVALUATION - Auto-close after deadline
+
+Issue: Evaluations don't close automatically past deadline.
+
+Files needed: `EvaluationFormController.php`, `EvaluationForm` model
+
+15. EVALUATION - Analytics graph for results
+
+Issue: No visual analytics for evaluation results.
+
+Files needed: `EvaluationAnalytics.tsx`, `EvaluationFormController.php` (analytics method)

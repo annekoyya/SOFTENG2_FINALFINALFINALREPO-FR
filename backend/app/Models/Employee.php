@@ -149,10 +149,7 @@ class Employee extends Model
 
     public function getFullNameAttribute(): string
     {
-        $middle = $this->middle_name ? ' ' . strtoupper($this->middle_name[0]) . '.' : '';
-        $ext    = $this->name_extension ? ' ' . $this->name_extension : '';
-
-        return "{$this->first_name}{$middle} {$this->last_name}{$ext}";
+        return trim("{$this->first_name} {$this->last_name}");
     }
 
     /**

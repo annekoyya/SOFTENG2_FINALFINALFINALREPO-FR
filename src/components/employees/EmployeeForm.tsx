@@ -1,366 +1,325 @@
 // src/components/employees/EmployeeForm.tsx
+// FIX #4: salary auto-fills from job category selection
+// FIX #2: form correctly submits via onSubmit prop
 import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { authFetch } from "@/hooks/api";
 import { Loader2 } from "lucide-react";
-import type { Employee, EmployeeFormData } from "@/types/employee";
+import type { Employee } from "@/types/employee";
 
-// Schema
-const employeeSchema = z.object({
-  first_name: z.string().min(2, "First name must be at least 2 characters"),
-  last_name: z.string().min(2, "Last name must be at least 2 characters"),
-  middle_name: z.string().optional(),
-  name_extension: z.string().optional(),
-  date_of_birth: z.string().min(1, "Date of birth is required"),
-  email: z.string().email("Invalid email address"),
-  phone_number: z.string().min(10, "Phone number must be at least 10 characters"),
-  home_address: z.string().min(5, "Address must be at least 5 characters"),
-  emergency_contact_name: z.string().optional(),
-  emergency_contact_number: z.string().optional(),
-  relationship: z.string().optional(),
-  tin: z.string().optional(),
-  sss_number: z.string().optional(),
-  pagibig_number: z.string().optional(),
-  philhealth_number: z.string().optional(),
-  bank_name: z.string().optional(),
-  account_name: z.string().optional(),
-  account_number: z.string().optional(),
-  start_date: z.string().min(1, "Start date is required"),
-  department: z.string().min(1, "Department is required"),
-  job_category: z.string().min(1, "Job category is required"),
-  employment_type: z.enum(["regular", "probationary", "contractual", "part_time", "intern"]),
-  shift_sched: z.enum(["morning", "afternoon", "night"]).optional(),
-  basic_salary: z.coerce.number().min(0, "Salary must be 0 or greater"),
-  role: z.enum(["Employee", "HR", "Manager", "Accountant", "Admin"]).optional(),
-});
+// ─── Salary map (mirrors backend) ────────────────────────────────────────────
+const SALARY_MAP: Record<string, number> = {
+  'Front Desk Agent': 18000, 'Concierge': 19000, 'Reservations Agent': 18500,
+  'Guest Relations Officer': 20000, 'Bell Staff': 16000,
+  'Room Attendant': 16000, 'Laundry Attendant': 15500,
+  'Housekeeping Supervisor': 22000, 'Public Area Cleaner': 15000,
+  'Waiter/Waitress': 16500, 'Bartender': 18000, 'Chef de Partie': 25000,
+  'Sous Chef': 32000, 'Executive Chef': 45000, 'Kitchen Steward': 15000,
+  'Maintenance Technician': 19000, 'Electrician': 22000, 'Plumber': 21000,
+  'Maintenance Supervisor': 28000,
+  'HR Officer': 25000, 'Accounting Staff': 24000, 'Payroll Officer': 26000,
+  'General Manager': 65000, 'Department Manager': 42000, 'Supervisor': 28000,
+  'Security Guard': 17000, 'Security Supervisor': 22000,
+  'Sales Manager': 38000, 'Marketing Officer': 28000, 'Reservations Manager': 32000,
+};
 
-interface EmployeeFormProps {
+const JOB_CATEGORIES_BY_DEPT: Record<string, string[]> = {
+  'Front Office':    ['Front Desk Agent','Concierge','Reservations Agent','Guest Relations Officer','Bell Staff'],
+  'Housekeeping':    ['Room Attendant','Laundry Attendant','Housekeeping Supervisor','Public Area Cleaner'],
+  'Food & Beverage': ['Waiter/Waitress','Bartender','Chef de Partie','Sous Chef','Executive Chef','Kitchen Steward'],
+  'Maintenance':     ['Maintenance Technician','Electrician','Plumber','Maintenance Supervisor'],
+  'Administration':  ['HR Officer','Accounting Staff','Payroll Officer','General Manager','Department Manager','Supervisor'],
+  'Security':        ['Security Guard','Security Supervisor'],
+  'Sales & Marketing': ['Sales Manager','Marketing Officer','Reservations Manager'],
+};
+
+const DEPARTMENTS = Object.keys(JOB_CATEGORIES_BY_DEPT);
+
+const determineRole = (dept: string, job: string): string => {
+  if (dept === 'Administration' && job === 'HR Officer')       return 'HR';
+  if (dept === 'Administration' && job === 'Accounting Staff') return 'Accountant';
+  if (dept === 'Administration' && job === 'Payroll Officer')  return 'Accountant';
+  if (job === 'General Manager' || job === 'Department Manager') return 'Admin';
+  if (job === 'Supervisor' || job.includes('Supervisor'))       return 'Manager';
+  return 'Employee';
+};
+
+interface Props {
   employee?: Employee;
-  onSubmit: (data: EmployeeFormData) => Promise<void>;
+  onSubmit: (data: Record<string, unknown>) => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
 }
 
-// Department options
-const DEPARTMENTS = [
-  "Human Resources", "Finance", "Front Office", "Food & Beverage",
-  "Housekeeping", "Engineering", "Security", "Sales & Marketing",
-];
-
-// Salary mapping
-const SALARY_MAPPING: Record<string, number> = {
-  "Manager": 50000,
-  "Supervisor": 35000,
-  "Staff": 25000,
-  "Associate": 20000,
-  "Intern": 10000,
-  "Trainee": 8000,
-  "Receptionist": 15000,
-  "Housekeeper": 12000,
-  "Waiter": 13000,
-  "Cook": 18000,
-  "Accountant": 25000,
-  "HR Specialist": 22000,
+type FormData = {
+  first_name: string; last_name: string; middle_name: string; name_extension: string;
+  date_of_birth: string; email: string; phone_number: string; home_address: string;
+  emergency_contact_name: string; emergency_contact_number: string; relationship: string;
+  tin: string; sss_number: string; pagibig_number: string; philhealth_number: string;
+  bank_name: string; account_name: string; account_number: string;
+  start_date: string; department: string; job_category: string;
+  employment_type: string; shift_sched: string;
+  basic_salary: string; role: string;
 };
 
-// Determine role based on department and job category
-const determineRole = (department: string, jobCategory: string): string => {
-  if (jobCategory === "Admin") return "Admin";
-  if (department === "Human Resources") return "HR";
-  if (department === "Finance" && jobCategory === "Accountant") return "Accountant";
-  if (jobCategory === "Manager") return "Manager";
-  return "Employee";
-};
-
-export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: EmployeeFormProps) {
-  const [jobCategories, setJobCategories] = useState<string[]>([]);
-  const [loadingOptions, setLoadingOptions] = useState(true);
-
-  // Fetch job categories from API
-  useEffect(() => {
-    const fetchOptions = async () => {
-      try {
-        const res = await authFetch("/api/employees/job-categories");
-        const data = await res.json();
-        if (data.success && data.data.length > 0) {
-          setJobCategories(data.data);
-        } else {
-          setJobCategories(Object.keys(SALARY_MAPPING));
-        }
-      } catch (error) {
-        setJobCategories(Object.keys(SALARY_MAPPING));
-      } finally {
-        setLoadingOptions(false);
-      }
-    };
-    fetchOptions();
-  }, []);
-
-  const form = useForm<z.infer<typeof employeeSchema>>({
-    resolver: zodResolver(employeeSchema),
-    defaultValues: {
-      first_name: employee?.first_name || "",
-      last_name: employee?.last_name || "",
-      middle_name: employee?.middle_name || "",
-      name_extension: employee?.name_extension || "",
-      date_of_birth: employee?.date_of_birth || "",
-      email: employee?.email || "",
-      phone_number: employee?.phone_number || "",
-      home_address: employee?.home_address || "",
-      emergency_contact_name: employee?.emergency_contact_name || "",
-      emergency_contact_number: employee?.emergency_contact_number || "",
-      relationship: employee?.relationship || "",
-      tin: employee?.tin || "",
-      sss_number: employee?.sss_number || "",
-      pagibig_number: employee?.pagibig_number || "",
-      philhealth_number: employee?.philhealth_number || "",
-      bank_name: employee?.bank_name || "",
-      account_name: employee?.account_name || "",
-      account_number: employee?.account_number || "",
-      start_date: employee?.start_date || "",
-      department: employee?.department || "",
-      job_category: employee?.job_category || "",
-      employment_type: employee?.employment_type || "regular",
-      shift_sched: employee?.shift_sched || "morning",
-      basic_salary: employee?.basic_salary ? parseFloat(employee.basic_salary as unknown as string) : 0,
-      role: employee?.role || "Employee",
-    },
+export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Props) {
+  const [form, setForm] = useState<FormData>({
+    first_name:               employee?.first_name ?? "",
+    last_name:                employee?.last_name ?? "",
+    middle_name:              employee?.middle_name ?? "",
+    name_extension:           employee?.name_extension ?? "",
+    date_of_birth:            employee?.date_of_birth ?? "",
+    email:                    employee?.email ?? "",
+    phone_number:             employee?.phone_number ?? "",
+    home_address:             employee?.home_address ?? "",
+    emergency_contact_name:   employee?.emergency_contact_name ?? "",
+    emergency_contact_number: employee?.emergency_contact_number ?? "",
+    relationship:             employee?.relationship ?? "",
+    tin:                      employee?.tin ?? "",
+    sss_number:               employee?.sss_number ?? "",
+    pagibig_number:           employee?.pagibig_number ?? "",
+    philhealth_number:        employee?.philhealth_number ?? "",
+    bank_name:                employee?.bank_name ?? "",
+    account_name:             employee?.account_name ?? "",
+    account_number:           employee?.account_number ?? "",
+    start_date:               employee?.start_date ?? "",
+    department:               employee?.department ?? "",
+    job_category:             employee?.job_category ?? "",
+    employment_type:          employee?.employment_type ?? "probationary",
+    shift_sched:              employee?.shift_sched ?? "morning",
+    basic_salary:             employee?.basic_salary ? String(employee.basic_salary) : "",
+    role:                     employee?.role ?? "Employee",
   });
 
-  const selectedDepartment = form.watch("department");
-  const selectedJobCategory = form.watch("job_category");
+  const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
 
-  // Auto-update salary when job category changes
+  const set = (field: keyof FormData, value: string) =>
+    setForm(prev => ({ ...prev, [field]: value }));
+
+  // FIX #4: auto-fill salary and role when job_category changes
   useEffect(() => {
-    if (selectedJobCategory && SALARY_MAPPING[selectedJobCategory]) {
-      form.setValue("basic_salary", SALARY_MAPPING[selectedJobCategory]);
+    if (form.job_category && SALARY_MAP[form.job_category]) {
+      set("basic_salary", String(SALARY_MAP[form.job_category]));
     }
-  }, [selectedJobCategory, form]);
+  }, [form.job_category]);
 
-  // Auto-update role when department or job category changes
   useEffect(() => {
-    if (selectedDepartment && selectedJobCategory) {
-      const role = determineRole(selectedDepartment, selectedJobCategory);
-      form.setValue("role", role as any);
+    if (form.department && form.job_category) {
+      set("role", determineRole(form.department, form.job_category));
     }
-  }, [selectedDepartment, selectedJobCategory, form]);
+  }, [form.department, form.job_category]);
 
-  const handleSubmit = async (data: z.infer<typeof employeeSchema>) => {
-    await onSubmit(data as EmployeeFormData);
+  const availableCategories = form.department ? (JOB_CATEGORIES_BY_DEPT[form.department] ?? []) : [];
+
+  const validate = (): boolean => {
+    const e: Partial<Record<keyof FormData, string>> = {};
+    if (!form.first_name)   e.first_name   = "Required";
+    if (!form.last_name)    e.last_name    = "Required";
+    if (!form.date_of_birth) e.date_of_birth = "Required";
+    if (!form.email)        e.email        = "Required";
+    if (!form.phone_number) e.phone_number = "Required";
+    if (!form.home_address) e.home_address = "Required";
+    if (!form.start_date)   e.start_date   = "Required";
+    if (!form.department)   e.department   = "Required";
+    if (!form.job_category) e.job_category = "Required";
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
-  const firstName = form.watch("first_name");
-  const lastName = form.watch("last_name");
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validate()) return;
+    await onSubmit({
+      ...form,
+      basic_salary: parseFloat(form.basic_salary) || 0,
+    });
+  };
+
+  const F = ({ label, field, required, type = "text", placeholder }: {
+    label: string; field: keyof FormData; required?: boolean; type?: string; placeholder?: string;
+  }) => (
+    <div>
+      <label className="text-xs font-medium text-foreground/80">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      <Input
+        className={`mt-1 h-9 ${errors[field] ? "border-red-400" : ""}`}
+        type={type}
+        value={form[field]}
+        onChange={e => set(field, e.target.value)}
+        placeholder={placeholder}
+      />
+      {errors[field] && <p className="text-red-500 text-xs mt-0.5">{errors[field]}</p>}
+    </div>
+  );
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-        <Tabs defaultValue="personal" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="personal">Personal</TabsTrigger>
-            <TabsTrigger value="employment">Employment</TabsTrigger>
-            <TabsTrigger value="contact">Contact</TabsTrigger>
-            <TabsTrigger value="documents">Documents</TabsTrigger>
-          </TabsList>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <Tabs defaultValue="personal">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="personal">Personal</TabsTrigger>
+          <TabsTrigger value="employment">Employment</TabsTrigger>
+          <TabsTrigger value="contact">Contact</TabsTrigger>
+          <TabsTrigger value="banking">Banking</TabsTrigger>
+        </TabsList>
 
-          <TabsContent value="personal" className="space-y-6 pt-6">
-            <div className="flex items-center gap-6">
-              <Avatar className="h-24 w-24 border-4 border-primary/20">
-                <AvatarFallback className="bg-primary/10 text-primary text-2xl font-semibold">
-                  {firstName?.[0] || "?"}{lastName?.[0] || "?"}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <h4 className="font-medium">Profile Photo</h4>
-                <p className="text-sm text-muted-foreground">Photo upload coming soon.</p>
-              </div>
+        {/* ── Personal ─────────────────────────────────────────────────── */}
+        <TabsContent value="personal" className="space-y-3 pt-4">
+          <div className="grid grid-cols-2 gap-3">
+            <F label="First Name" field="first_name" required />
+            <F label="Last Name"  field="last_name"  required />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <F label="Middle Name"    field="middle_name" />
+            <F label="Name Extension" field="name_extension" placeholder="Jr., Sr., III" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <F label="Date of Birth" field="date_of_birth" required type="date" />
+            <F label="Email"         field="email"         required type="email" />
+          </div>
+          <F label="Home Address" field="home_address" required />
+        </TabsContent>
+
+        {/* ── Employment ───────────────────────────────────────────────── */}
+        <TabsContent value="employment" className="space-y-3 pt-4">
+          <div className="grid grid-cols-2 gap-3">
+            {/* Department */}
+            <div>
+              <label className="text-xs font-medium text-foreground/80">
+                Department<span className="text-red-500 ml-0.5">*</span>
+              </label>
+              <Select value={form.department} onValueChange={v => { set("department", v); set("job_category", ""); }}>
+                <SelectTrigger className={`mt-1 h-9 ${errors.department ? "border-red-400" : ""}`}>
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DEPARTMENTS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {errors.department && <p className="text-red-500 text-xs mt-0.5">{errors.department}</p>}
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField control={form.control} name="first_name" render={({ field }) => (
-                <FormItem><FormLabel>First Name *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
-              <FormField control={form.control} name="last_name" render={({ field }) => (
-                <FormItem><FormLabel>Last Name *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
+            {/* Job Category — FIX #4: updates salary on change */}
+            <div>
+              <label className="text-xs font-medium text-foreground/80">
+                Job Category<span className="text-red-500 ml-0.5">*</span>
+              </label>
+              <Select
+                value={form.job_category}
+                onValueChange={v => set("job_category", v)}
+                disabled={!form.department}
+              >
+                <SelectTrigger className={`mt-1 h-9 ${errors.job_category ? "border-red-400" : ""}`}>
+                  <SelectValue placeholder={form.department ? "Select category" : "Select dept first"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {errors.job_category && <p className="text-red-500 text-xs mt-0.5">{errors.job_category}</p>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {/* Employment type */}
+            <div>
+              <label className="text-xs font-medium">Employment Type<span className="text-red-500 ml-0.5">*</span></label>
+              <Select value={form.employment_type} onValueChange={v => set("employment_type", v)}>
+                <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="regular">Regular</SelectItem>
+                  <SelectItem value="probationary">Probationary</SelectItem>
+                  <SelectItem value="contractual">Contractual</SelectItem>
+                  <SelectItem value="part_time">Part-time</SelectItem>
+                  <SelectItem value="intern">Intern</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField control={form.control} name="middle_name" render={({ field }) => (
-                <FormItem><FormLabel>Middle Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
-              <FormField control={form.control} name="name_extension" render={({ field }) => (
-                <FormItem><FormLabel>Name Extension</FormLabel><FormControl><Input placeholder="Jr., Sr., III" {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
+            {/* Shift */}
+            <div>
+              <label className="text-xs font-medium">Shift Schedule</label>
+              <Select value={form.shift_sched} onValueChange={v => set("shift_sched", v)}>
+                <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="morning">Morning (07:00 – 15:00)</SelectItem>
+                  <SelectItem value="afternoon">Afternoon (15:00 – 23:00)</SelectItem>
+                  <SelectItem value="night">Night (23:00 – 07:00)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+          </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField control={form.control} name="date_of_birth" render={({ field }) => (
-                <FormItem><FormLabel>Date of Birth *</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
-              <FormField control={form.control} name="email" render={({ field }) => (
-                <FormItem><FormLabel>Email *</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
+          <div className="grid grid-cols-2 gap-3">
+            <F label="Start Date" field="start_date" required type="date" />
+            {/* FIX #4: read-only salary that auto-fills */}
+            <div>
+              <label className="text-xs font-medium">Basic Salary (₱) — auto from category</label>
+              <Input
+                className="mt-1 h-9 bg-muted/30"
+                type="number"
+                value={form.basic_salary}
+                readOnly
+              />
+              {form.basic_salary && (
+                <p className="text-xs text-green-600 mt-0.5">
+                  ₱{Number(form.basic_salary).toLocaleString("en-PH")} / month
+                </p>
+              )}
             </div>
+          </div>
 
-            <FormField control={form.control} name="home_address" render={({ field }) => (
-              <FormItem><FormLabel>Address *</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>
-            )} />
-          </TabsContent>
+          {/* Role — read-only, auto-calculated */}
+          <div>
+            <label className="text-xs font-medium">System Role (auto-determined)</label>
+            <Input className="mt-1 h-9 bg-muted/30" value={form.role} readOnly />
+          </div>
+        </TabsContent>
 
-          <TabsContent value="employment" className="space-y-6 pt-6">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField control={form.control} name="department" render={({ field }) => (
-                <FormItem><FormLabel>Department *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger></FormControl>
-                    <SelectContent>{DEPARTMENTS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="job_category" render={({ field }) => (
-                <FormItem><FormLabel>Job Category *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value} disabled={loadingOptions}>
-                    <FormControl><SelectTrigger><SelectValue placeholder={loadingOptions ? "Loading..." : "Select job category"} /></SelectTrigger></FormControl>
-                    <SelectContent>{jobCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )} />
+        {/* ── Contact ──────────────────────────────────────────────────── */}
+        <TabsContent value="contact" className="space-y-3 pt-4">
+          <F label="Phone Number" field="phone_number" required placeholder="+63 9XX XXX XXXX" />
+
+          <div className="rounded-lg border p-4 space-y-3">
+            <p className="text-sm font-semibold">Emergency Contact</p>
+            <div className="grid grid-cols-2 gap-3">
+              <F label="Contact Name"   field="emergency_contact_name"   />
+              <F label="Contact Number" field="emergency_contact_number" />
             </div>
+            <F label="Relationship" field="relationship" placeholder="Spouse, Parent, Sibling" />
+          </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField control={form.control} name="employment_type" render={({ field }) => (
-                <FormItem><FormLabel>Employment Type *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                    <SelectContent>
-                      <SelectItem value="regular">Regular</SelectItem>
-                      <SelectItem value="probationary">Probationary</SelectItem>
-                      <SelectItem value="contractual">Contractual</SelectItem>
-                      <SelectItem value="part_time">Part Time</SelectItem>
-                      <SelectItem value="intern">Intern</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="shift_sched" render={({ field }) => (
-                <FormItem><FormLabel>Shift Schedule</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                    <SelectContent>
-                      <SelectItem value="morning">Morning (6AM - 2PM)</SelectItem>
-                      <SelectItem value="afternoon">Afternoon (2PM - 10PM)</SelectItem>
-                      <SelectItem value="night">Night (10PM - 6AM)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )} />
+          <div className="rounded-lg border p-4 space-y-3">
+            <p className="text-sm font-semibold">Government IDs</p>
+            <div className="grid grid-cols-2 gap-3">
+              <F label="TIN"        field="tin"              placeholder="Tax ID Number" />
+              <F label="SSS Number" field="sss_number"       />
+              <F label="PhilHealth" field="philhealth_number" />
+              <F label="Pag-IBIG"   field="pagibig_number"   />
             </div>
+          </div>
+        </TabsContent>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormField control={form.control} name="start_date" render={({ field }) => (
-                <FormItem><FormLabel>Start Date *</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
-              <FormField control={form.control} name="basic_salary" render={({ field }) => (
-                <FormItem><FormLabel>Monthly Salary (₱)</FormLabel>
-                  <FormControl><Input type="number" {...field} readOnly className="bg-gray-100 cursor-not-allowed" /></FormControl>
-                  <p className="text-xs text-muted-foreground">Auto-filled based on job category</p>
-                  <FormMessage />
-                </FormItem>
-              )} />
-            </div>
+        {/* ── Banking ──────────────────────────────────────────────────── */}
+        <TabsContent value="banking" className="space-y-3 pt-4">
+          <div className="grid grid-cols-2 gap-3">
+            <F label="Bank Name"    field="bank_name"    placeholder="BDO, BPI, Metrobank…" />
+            <F label="Account Name" field="account_name" placeholder="Name on account" />
+          </div>
+          <F label="Account Number" field="account_number" />
+          <p className="text-xs text-muted-foreground">Required for payroll disbursement.</p>
+        </TabsContent>
+      </Tabs>
 
-            {/* Role display - read-only */}
-            <FormField control={form.control} name="role" render={({ field }) => (
-              <FormItem><FormLabel>System Role (Auto-calculated)</FormLabel>
-                <FormControl><Input {...field} readOnly className="bg-gray-100" /></FormControl>
-                <p className="text-xs text-muted-foreground">Role is determined by department and job category</p>
-                <FormMessage />
-              </FormItem>
-            )} />
-          </TabsContent>
-
-          <TabsContent value="contact" className="space-y-6 pt-6">
-            <FormField control={form.control} name="phone_number" render={({ field }) => (
-              <FormItem><FormLabel>Phone Number *</FormLabel><FormControl><Input placeholder="+63 9XX XXX XXXX" {...field} /></FormControl><FormMessage /></FormItem>
-            )} />
-
-            <div className="rounded-lg border p-4">
-              <h4 className="mb-4 font-medium">Emergency Contact</h4>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField control={form.control} name="emergency_contact_name" render={({ field }) => (
-                  <FormItem><FormLabel>Contact Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={form.control} name="emergency_contact_number" render={({ field }) => (
-                  <FormItem><FormLabel>Contact Phone</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={form.control} name="relationship" render={({ field }) => (
-                  <FormItem><FormLabel>Relationship</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-              </div>
-            </div>
-
-            <div className="rounded-lg border p-4">
-              <h4 className="mb-4 font-medium">Government IDs</h4>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField control={form.control} name="tin" render={({ field }) => (<FormItem><FormLabel>TIN</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="sss_number" render={({ field }) => (<FormItem><FormLabel>SSS Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="pagibig_number" render={({ field }) => (<FormItem><FormLabel>Pag-IBIG</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="philhealth_number" render={({ field }) => (<FormItem><FormLabel>PhilHealth</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-              </div>
-            </div>
-
-            <div className="rounded-lg border p-4">
-              <h4 className="mb-4 font-medium">Bank Details</h4>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField control={form.control} name="bank_name" render={({ field }) => (<FormItem><FormLabel>Bank Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="account_name" render={({ field }) => (<FormItem><FormLabel>Account Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="account_number" render={({ field }) => (<FormItem><FormLabel>Account Number</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="documents" className="space-y-6 pt-6">
-            <div className="rounded-lg border-2 border-dashed p-8 text-center">
-              <p className="text-sm text-muted-foreground">Document upload coming soon</p>
-            </div>
-          </TabsContent>
-        </Tabs>
-
-        <div className="flex justify-end gap-3 border-t pt-6">
-          <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-          <Button type="submit" disabled={isLoading}>
-            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            {employee ? "Update Employee" : "Save"}
-          </Button>
-        </div>
-      </form>
-    </Form>
+      <div className="flex justify-end gap-3 border-t pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
+        <Button type="submit" disabled={isLoading}>
+          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {employee ? "Update Employee" : "Create Employee"}
+        </Button>
+      </div>
+    </form>
   );
 }

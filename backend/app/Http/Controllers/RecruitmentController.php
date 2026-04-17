@@ -24,13 +24,13 @@ class RecruitmentController extends Controller
 
     public function getJobPostings(): JsonResponse
     {
-        $postings = JobPosting::with(['creator', 'applicants'])
+        $postings = JobPosting::with(['creator'])
+            ->withCount('applicants')
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($p) {
-                $p->applicants_count = $p->applicants->count();
-                $p->hired_count      = $p->applicants->where('pipeline_stage', 'hired')->count();
-                $p->slots_remaining  = max(0, ($p->slots ?? 0) - $p->hired_count);
+                $p->hired_count     = $p->applicants()->where('pipeline_stage', 'hired')->count();
+                $p->slots_remaining = max(0, ($p->slots ?? 0) - $p->hired_count);
                 return $p;
             });
 
@@ -49,20 +49,18 @@ class RecruitmentController extends Controller
             'deadline'     => 'nullable|date',
         ]);
 
-        $posting = JobPosting::create([
-            ...$v,
-            'created_by' => Auth::id(),
-            'status'     => 'open',
-        ]);
-
+        $posting = JobPosting::create([...$v, 'created_by' => Auth::id(), 'status' => 'open']);
         return response()->json(['success' => true, 'data' => $posting], 201);
     }
 
     public function updateJobPosting(Request $request, int $id): JsonResponse
     {
         $posting = JobPosting::findOrFail($id);
-        $posting->update($request->all());
-        return response()->json(['success' => true, 'data' => $posting]);
+        $posting->update($request->only([
+            'title', 'department', 'job_category', 'description',
+            'slots', 'posted_date', 'deadline', 'status',
+        ]));
+        return response()->json(['success' => true, 'data' => $posting->fresh()]);
     }
 
     public function deleteJobPosting(int $id): JsonResponse
@@ -77,7 +75,7 @@ class RecruitmentController extends Controller
 
     public function getApplicants(Request $request): JsonResponse
     {
-        $query = Applicant::with(['jobPosting', 'interview']);
+        $query = Applicant::with(['jobPosting']);
 
         if ($request->filled('job_posting_id')) {
             $query->where('job_posting_id', $request->job_posting_id);
@@ -98,7 +96,7 @@ class RecruitmentController extends Controller
             'first_name'     => 'required|string|max:255',
             'last_name'      => 'required|string|max:255',
             'email'          => 'required|email|unique:applicants,email',
-            'phone'          => 'nullable|string|max:20',
+            'phone'          => 'nullable|string|max:30',
             'job_posting_id' => 'required|exists:job_postings,id',
             'resume'         => 'nullable|file|mimes:pdf,doc,docx|max:2048',
         ]);
@@ -118,7 +116,7 @@ class RecruitmentController extends Controller
             'pipeline_stage' => 'applied',
         ]);
 
-        return response()->json(['success' => true, 'data' => $applicant], 201);
+        return response()->json(['success' => true, 'data' => $applicant->load('jobPosting')], 201);
     }
 
     public function updateApplicantStage(Request $request, int $id): JsonResponse
@@ -130,30 +128,29 @@ class RecruitmentController extends Controller
         $applicant = Applicant::findOrFail($id);
         $applicant->update($v);
 
-        return response()->json(['success' => true, 'data' => $applicant]);
+        return response()->json(['success' => true, 'data' => $applicant->fresh()]);
     }
 
-    // ── FIX #16 & #19: only Admin can hire, enforce slot limit ───────────
-
+    // ── FIX #16: enforce slot limit  |  FIX #19: only Admin can hire ─────────
     public function hireApplicant(Request $request, int $id): JsonResponse
     {
-        // FIX #19: only Admin can hire
+        // FIX #19: only Admin
         if (Auth::user()->role !== 'Admin') {
             return response()->json(['success' => false, 'message' => 'Only Admin can hire applicants.'], 403);
         }
 
         $applicant = Applicant::with('jobPosting')->findOrFail($id);
+        $posting   = $applicant->jobPosting;
 
-        // FIX #16: enforce slot limit
-        $posting     = $applicant->jobPosting;
-        $hiredCount  = Applicant::where('job_posting_id', $posting->id)
-                                 ->where('pipeline_stage', 'hired')
-                                 ->count();
+        // FIX #16: slot enforcement
+        $hiredCount = Applicant::where('job_posting_id', $posting->id)
+                                ->where('pipeline_stage', 'hired')
+                                ->count();
 
-        if ($hiredCount >= ($posting->slots ?? PHP_INT_MAX)) {
+        if ($posting->slots && $hiredCount >= $posting->slots) {
             return response()->json([
                 'success' => false,
-                'message' => "No slots remaining for \"{$posting->title}\". All {$posting->slots} positions are filled.",
+                'message' => "No slots remaining for \"{$posting->title}\". All {$posting->slots} position(s) filled.",
             ], 422);
         }
 
@@ -161,12 +158,12 @@ class RecruitmentController extends Controller
         try {
             $applicant->update(['pipeline_stage' => 'hired', 'hired_at' => now()]);
 
-            // Close posting if all slots are now filled
-            if (($hiredCount + 1) >= ($posting->slots ?? PHP_INT_MAX)) {
+            // Auto-close posting if all slots filled
+            if ($posting->slots && ($hiredCount + 1) >= $posting->slots) {
                 $posting->update(['status' => 'closed']);
             }
 
-            // Create a placeholder Employee (details filled in via NewHireDetailsModal)
+            // Create placeholder Employee record (details filled via NewHireDetailsModal)
             $employee = Employee::create([
                 'first_name'               => $applicant->first_name,
                 'last_name'                => $applicant->last_name,
@@ -196,10 +193,10 @@ class RecruitmentController extends Controller
             ]);
 
             TrainingAssignment::create([
-                'training_id' => $training->id,
-                'applicant_id'=> $applicant->id,
-                'employee_id' => $employee->id,
-                'status'      => 'pending',
+                'training_id'  => $training->id,
+                'applicant_id' => $applicant->id,
+                'employee_id'  => $employee->id,
+                'status'       => 'pending',
             ]);
 
             DB::commit();
@@ -227,7 +224,7 @@ class RecruitmentController extends Controller
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // INTERVIEWS  (FIX #19: visible to Admin only in UI, but API still works for HR)
+    // INTERVIEWS
     // ══════════════════════════════════════════════════════════════════════
 
     public function getInterviews(): JsonResponse
@@ -238,11 +235,10 @@ class RecruitmentController extends Controller
         return response()->json(['success' => true, 'data' => $interviews]);
     }
 
-    // FIX #17: interviewer selection — only HR users (no department filter since
-    // employees & users don't share department easily; front-end filters by role)
+    // FIX #17: return only HR users for interviewer selection
     public function getInterviewers(): JsonResponse
     {
-        $hrs = User::where('role', 'HR')->get(['id', 'name', 'email', 'role']);
+        $hrs = User::where('role', 'HR')->get(['id', 'name', 'email']);
         return response()->json(['success' => true, 'data' => $hrs]);
     }
 
@@ -254,10 +250,13 @@ class RecruitmentController extends Controller
             'scheduled_at'   => 'required|date',
         ]);
 
-        // FIX #17: ensure interviewer is HR
+        // FIX #17: validate interviewer is HR role
         $interviewer = User::findOrFail($v['interviewer_id']);
-        if ($interviewer->role !== 'HR') {
-            return response()->json(['success' => false, 'message' => 'Interviewer must be an HR user.'], 422);
+        if (!in_array($interviewer->role, ['HR', 'Admin'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Interviewer must be an HR user.',
+            ], 422);
         }
 
         DB::beginTransaction();
@@ -265,19 +264,11 @@ class RecruitmentController extends Controller
             $interview = Interview::create([...$v, 'status' => 'scheduled']);
             Applicant::find($v['applicant_id'])->update(['pipeline_stage' => 'interview_scheduled']);
             DB::commit();
-            return response()->json(['success' => true, 'data' => $interview]);
+            return response()->json(['success' => true, 'data' => $interview->load(['applicant', 'interviewer'])]);
         } catch (\Throwable $e) {
             DB::rollBack();
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
-    }
-
-    public function updateInterviewStatus(Request $request, int $id): JsonResponse
-    {
-        $v         = $request->validate(['status' => 'required|in:scheduled,completed,cancelled']);
-        $interview = Interview::findOrFail($id);
-        $interview->update($v);
-        return response()->json(['success' => true, 'data' => $interview]);
     }
 
     public function completeInterview(int $id): JsonResponse
@@ -288,7 +279,7 @@ class RecruitmentController extends Controller
             $interview->update(['status' => 'completed']);
             $interview->applicant->update(['pipeline_stage' => 'interviewed']);
             DB::commit();
-            return response()->json(['success' => true]);
+            return response()->json(['success' => true, 'data' => $interview->fresh()]);
         } catch (\Throwable $e) {
             DB::rollBack();
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
@@ -296,57 +287,15 @@ class RecruitmentController extends Controller
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // TRAININGS
+    // TRAINING
     // ══════════════════════════════════════════════════════════════════════
-
-    public function getTrainings(): JsonResponse
-    {
-        $trainings = Training::with(['applicant', 'applicant.jobPosting', 'assignments', 'assignments.trainer'])
-            ->orderBy('created_at', 'desc')
-            ->get();
-        return response()->json(['success' => true, 'data' => $trainings]);
-    }
-
-    public function createTraining(Request $request): JsonResponse
-    {
-        $v = $request->validate([
-            'title'       => 'required|string|max:255',
-            'description' => 'nullable|string',
-        ]);
-        $training = Training::create([...$v, 'created_by' => Auth::id()]);
-        return response()->json(['success' => true, 'data' => $training], 201);
-    }
-
-    public function deleteTraining(int $id): JsonResponse
-    {
-        Training::findOrFail($id)->delete();
-        return response()->json(['success' => true]);
-    }
-
-    public function assignTraining(Request $request): JsonResponse
-    {
-        $v = $request->validate([
-            'training_id' => 'required|exists:trainings,id',
-            'employee_id' => 'required|exists:employees,id',
-        ]);
-        $assignment = TrainingAssignment::create([...$v, 'status' => 'pending']);
-        return response()->json(['success' => true, 'data' => $assignment], 201);
-    }
 
     public function getTrainingAssignments(): JsonResponse
     {
-        $assignments = TrainingAssignment::with(['training', 'employee', 'trainer'])
+        $assignments = TrainingAssignment::with(['training', 'employee', 'trainer', 'applicant'])
             ->orderBy('created_at', 'desc')
             ->get();
         return response()->json(['success' => true, 'data' => $assignments]);
-    }
-
-    public function updateTrainingStatus(Request $request, int $id): JsonResponse
-    {
-        $v          = $request->validate(['status' => 'required|in:pending,in_progress,completed']);
-        $assignment = TrainingAssignment::findOrFail($id);
-        $assignment->update($v);
-        return response()->json(['success' => true, 'data' => $assignment]);
     }
 
     public function assignTrainer(Request $request, int $assignmentId): JsonResponse
@@ -354,13 +303,13 @@ class RecruitmentController extends Controller
         $v          = $request->validate(['trainer_id' => 'required|exists:employees,id']);
         $assignment = TrainingAssignment::findOrFail($assignmentId);
         $assignment->update(['trainer_id' => $v['trainer_id'], 'status' => 'in_progress']);
-        return response()->json(['success' => true, 'data' => $assignment]);
+        return response()->json(['success' => true, 'data' => $assignment->fresh(['trainer', 'training', 'employee'])]);
     }
 
-    // FIX #18: complete training → create new_hire without NOT NULL constraint violation
+    // FIX #18: complete training → creates NewHire record without NOT NULL violations
     public function completeTraining(int $assignmentId): JsonResponse
     {
-        $assignment = TrainingAssignment::with('employee')->findOrFail($assignmentId);
+        $assignment = TrainingAssignment::with('employee', 'applicant')->findOrFail($assignmentId);
 
         DB::beginTransaction();
         try {
@@ -368,39 +317,33 @@ class RecruitmentController extends Controller
 
             $employee = $assignment->employee;
 
-            if ($employee) {
-                // Only create new_hire if one doesn't already exist for this employee
-                $existing = NewHire::where('employee_id', $employee->id)->first();
-
-                if (!$existing) {
-                    NewHire::create([
-                        // Required non-nullable fields with sensible defaults
-                        'first_name'               => $employee->first_name,
-                        'last_name'                => $employee->last_name,
-                        'email'                    => $employee->email,
-                        'phone_number'             => $employee->phone_number !== 'TBD' ? $employee->phone_number : null,
-                        'department'               => $employee->department,
-                        'job_category'             => $employee->job_category,
-                        'start_date'               => $employee->start_date,
-                        'employment_type'          => $employee->employment_type,
-                        'role'                     => $employee->role,
-                        'basic_salary'             => $employee->basic_salary,
-                        'employee_id'              => $employee->id,
-                        'training_id'              => $assignment->training_id,
-                        'applicant_id'             => $assignment->applicant_id ?? null,
-                        'onboarding_status'        => 'pending',
-                        'created_by'               => Auth::id(),
-                        // Optional fields — null is fine
-                        'middle_name'              => $employee->middle_name ?? null,
-                        'name_extension'           => null,
-                        'date_of_birth'            => $employee->date_of_birth?->format('Y-m-d') ?? null,
-                        'home_address'             => !in_array($employee->home_address, ['TBD', 'To be updated']) ? $employee->home_address : null,
-                        'emergency_contact_name'   => !in_array($employee->emergency_contact_name, ['TBD', 'To be updated']) ? $employee->emergency_contact_name : null,
-                        'emergency_contact_number' => !in_array($employee->emergency_contact_number, ['TBD', 'To be updated']) ? $employee->emergency_contact_number : null,
-                        'relationship'             => !in_array($employee->relationship, ['TBD', 'To be updated']) ? $employee->relationship : null,
-                        'reporting_manager'        => $employee->reporting_manager ?? null,
-                    ]);
-                }
+            if ($employee && !NewHire::where('employee_id', $employee->id)->exists()) {
+                NewHire::create([
+                    'first_name'               => $employee->first_name,
+                    'last_name'                => $employee->last_name,
+                    'email'                    => $employee->email,
+                    'phone_number'             => !in_array($employee->phone_number, ['TBD', null]) ? $employee->phone_number : null,
+                    'department'               => $employee->department,
+                    'job_category'             => $employee->job_category,
+                    'start_date'               => $employee->start_date,
+                    'employment_type'          => $employee->employment_type,
+                    'role'                     => $employee->role,
+                    'basic_salary'             => $employee->basic_salary,
+                    'employee_id'              => $employee->id,
+                    'training_id'              => $assignment->training_id ?? null,
+                    'applicant_id'             => $assignment->applicant_id ?? null,
+                    'onboarding_status'        => 'pending',
+                    'created_by'               => Auth::id(),
+                    // Optional — null is fine
+                    'middle_name'              => $employee->middle_name ?? null,
+                    'date_of_birth'            => $employee->date_of_birth ? $employee->date_of_birth->format('Y-m-d') : null,
+                    'home_address'             => !in_array($employee->home_address, ['TBD', null]) ? $employee->home_address : null,
+                    'emergency_contact_name'   => !in_array($employee->emergency_contact_name, ['TBD', null]) ? $employee->emergency_contact_name : null,
+                    'emergency_contact_number' => !in_array($employee->emergency_contact_number, ['TBD', null]) ? $employee->emergency_contact_number : null,
+                    'relationship'             => !in_array($employee->relationship, ['TBD', null]) ? $employee->relationship : null,
+                    'reporting_manager'        => $employee->reporting_manager ?? null,
+                    'shift_sched'              => $employee->shift_sched ?? 'morning',
+                ]);
             }
 
             DB::commit();
@@ -412,19 +355,19 @@ class RecruitmentController extends Controller
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    // NEW HIRES
+    // NEW HIRES — FIX #1: two-step process (save details, then transfer)
     // ══════════════════════════════════════════════════════════════════════
 
     public function getNewHires(): JsonResponse
     {
-        $newHires = NewHire::with(['employee', 'training'])
+        $newHires = NewHire::with(['employee'])
             ->whereIn('onboarding_status', ['pending', 'complete'])
             ->orderBy('created_at', 'desc')
             ->get();
         return response()->json(['success' => true, 'data' => $newHires]);
     }
 
-    // FIX #1: Save all employee details before transfer
+    // Step 1: Save all details → sets onboarding_status to 'complete'
     public function completeNewHireDetails(Request $request, int $id): JsonResponse
     {
         $newHire = NewHire::findOrFail($id);
@@ -466,13 +409,13 @@ class RecruitmentController extends Controller
                 'completed_fields'  => array_keys($v),
             ]);
 
-            // Sync associated employee record
+            // Sync to associated employee record
             if ($newHire->employee_id) {
                 Employee::where('id', $newHire->employee_id)->update([
                     'first_name'               => $v['first_name'],
                     'last_name'                => $v['last_name'],
-                    'middle_name'              => $v['middle_name']              ?? null,
-                    'name_extension'           => $v['name_extension']           ?? null,
+                    'middle_name'              => $v['middle_name'] ?? null,
+                    'name_extension'           => $v['name_extension'] ?? null,
                     'date_of_birth'            => $v['date_of_birth'],
                     'email'                    => $v['email'],
                     'phone_number'             => $v['phone_number'],
@@ -480,13 +423,13 @@ class RecruitmentController extends Controller
                     'emergency_contact_name'   => $v['emergency_contact_name'],
                     'emergency_contact_number' => $v['emergency_contact_number'],
                     'relationship'             => $v['relationship'],
-                    'tin'                      => $v['tin']              ?? null,
-                    'sss_number'               => $v['sss_number']       ?? null,
-                    'pagibig_number'           => $v['pagibig_number']   ?? null,
+                    'tin'                      => $v['tin'] ?? null,
+                    'sss_number'               => $v['sss_number'] ?? null,
+                    'pagibig_number'           => $v['pagibig_number'] ?? null,
                     'philhealth_number'        => $v['philhealth_number'] ?? null,
-                    'bank_name'                => $v['bank_name']         ?? null,
-                    'account_name'             => $v['account_name']      ?? null,
-                    'account_number'           => $v['account_number']    ?? null,
+                    'bank_name'                => $v['bank_name'] ?? null,
+                    'account_name'             => $v['account_name'] ?? null,
+                    'account_number'           => $v['account_number'] ?? null,
                     'start_date'               => $v['start_date'],
                     'department'               => $v['department'],
                     'job_category'             => $v['job_category'],
@@ -500,18 +443,14 @@ class RecruitmentController extends Controller
             }
 
             DB::commit();
-            return response()->json([
-                'success' => true,
-                'data'    => $newHire->fresh(),
-                'message' => 'Details saved.',
-            ]);
+            return response()->json(['success' => true, 'data' => $newHire->fresh(), 'message' => 'Details saved.']);
         } catch (\Throwable $e) {
             DB::rollBack();
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
-    // FIX #1: Transfer only creates user account — details already saved by completeNewHireDetails
+    // Step 2: Transfer — creates user login, activates employee
     public function transferToEmployee(int $newHireId): JsonResponse
     {
         $newHire = NewHire::with('employee')->findOrFail($newHireId);
@@ -520,10 +459,11 @@ class RecruitmentController extends Controller
             return response()->json(['success' => false, 'message' => 'Already transferred.'], 422);
         }
 
+        // FIX #1: block transfer if details not completed
         if ($newHire->onboarding_status !== 'complete') {
             return response()->json([
                 'success' => false,
-                'message' => 'Please complete all required details before transferring.',
+                'message' => 'Please complete all required details before transferring. Click the employee name to fill in missing fields.',
             ], 422);
         }
 
@@ -534,10 +474,10 @@ class RecruitmentController extends Controller
 
         DB::beginTransaction();
         try {
-            // Create user account only if email not already registered
+            // Create user account if not already exists
             if (!User::where('email', $employee->email)->exists()) {
                 User::create([
-                    'name'     => $employee->first_name . ' ' . $employee->last_name,
+                    'name'     => "{$employee->first_name} {$employee->last_name}",
                     'email'    => $employee->email,
                     'password' => Hash::make('Employee@123'),
                     'role'     => $employee->role,
