@@ -72,6 +72,7 @@ interface TrainingAssignment {
   completed_at: string | null;
   training?: { id: number; title: string; description: string };
   applicant?: Applicant;
+  employee?: { id: number; first_name: string; last_name: string; department: string };
   trainer?: { id: number; first_name: string; last_name: string; department: string };
 }
 
@@ -350,7 +351,6 @@ function ApplicantManagementTab({ canManage }: { canManage: boolean }) {
   const [saving, setSaving] = useState(false);
   const [addForm, setAddForm] = useState({ first_name: "", last_name: "", email: "", phone: "", job_posting_id: "" });
   const [schedForm, setSchedForm] = useState({ interviewer_id: "", scheduled_at: "" });
-  const [resumeFile, setResumeFile] = useState<File | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -454,7 +454,6 @@ function ApplicantManagementTab({ canManage }: { canManage: boolean }) {
             toast({ title: "Applicant added successfully" });
             setAddOpen(false);
             setAddForm({ first_name: "", last_name: "", email: "", phone: "", job_posting_id: "" });
-            setResumeFile(null);
             load(); // Refresh the list
         } else {
             // Show validation errors
@@ -655,7 +654,7 @@ function ApplicantManagementTab({ canManage }: { canManage: boolean }) {
             </Select>
             <div>
               <label className="text-xs text-muted-foreground">Resume (PDF/DOC, optional)</label>
-              <Input type="file" accept=".pdf,.doc,.docx" className="mt-1" onChange={e => setResumeFile(e.target.files?.[0] ?? null)} />
+              <Input type="file" accept=".pdf,.doc,.docx" className="mt-1" />
             </div>
           </div>
           <DialogFooter>

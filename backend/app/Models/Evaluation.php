@@ -58,7 +58,7 @@ class Evaluation extends Model
     // Fix: EvaluationTemplate is in the same namespace — reference directly
     public function template(): BelongsTo
     {
-        return $this->belongsTo(EvaluationTemplate::class, 'evaluation_template_id');
+        return $this->belongsTo(EvaluationForm::class, 'evaluation_template_id');
     }
 
     public function evaluator(): BelongsTo

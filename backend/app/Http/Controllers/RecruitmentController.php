@@ -28,7 +28,7 @@ class RecruitmentController extends Controller
             ->withCount('applicants')
             ->orderBy('created_at', 'desc')
             ->get()
-            ->map(function ($p) {
+            ->map(function (JobPosting $p) {
                 $p->hired_count     = $p->applicants()->where('pipeline_stage', 'hired')->count();
                 $p->slots_remaining = max(0, ($p->slots ?? 0) - $p->hired_count);
                 return $p;

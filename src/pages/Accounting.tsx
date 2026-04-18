@@ -62,7 +62,7 @@ function PayslipDetailSheet({
     label: string,
     amount: number,
     note: string,
-  ) => Promise<void>;
+  ) => Promise<Payslip>;
 }) {
   const { toast } = useToast();
   const [acting,  setActing]  = useState(false);

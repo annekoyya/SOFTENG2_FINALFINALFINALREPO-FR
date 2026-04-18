@@ -119,10 +119,10 @@ export default function ArchivedEmployees() {
             employees={archivedEmployees}
             onView={handleView}
             onEdit={() => {}} // Archived employees can't be edited
-            onDelete={handlePurge}
-            isArchivedView={true}
-            onRestore={handleRestore}
-            onPurge={handlePurge}
+            onArchive={() => {}} // No archive action for archived employees
+            onSearch={() => {}}
+            onFilter={() => {}}
+            isLoading={false}
             isAdmin={isAdmin}
           />
         </div>

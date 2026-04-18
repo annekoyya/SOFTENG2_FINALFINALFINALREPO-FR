@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2 } from "lucide-react";
-import type { Employee } from "@/types/employee";
+import type { Employee, EmployeeFormData } from "@/types/employee";
 
 // ─── Salary map (mirrors backend) ────────────────────────────────────────────
 const SALARY_MAP: Record<string, number> = {
@@ -37,7 +37,9 @@ const JOB_CATEGORIES_BY_DEPT: Record<string, string[]> = {
 
 const DEPARTMENTS = Object.keys(JOB_CATEGORIES_BY_DEPT);
 
-const determineRole = (dept: string, job: string): string => {
+type RoleType = "Employee" | "HR" | "Manager" | "Accountant" | "Admin";
+
+const determineRole = (dept: string, job: string): RoleType => {
   if (dept === 'Administration' && job === 'HR Officer')       return 'HR';
   if (dept === 'Administration' && job === 'Accounting Staff') return 'Accountant';
   if (dept === 'Administration' && job === 'Payroll Officer')  return 'Accountant';
@@ -48,7 +50,7 @@ const determineRole = (dept: string, job: string): string => {
 
 interface Props {
   employee?: Employee;
-  onSubmit: (data: Record<string, unknown>) => Promise<void>;
+  onSubmit: (data: EmployeeFormData) => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
 }
@@ -61,7 +63,7 @@ type FormData = {
   bank_name: string; account_name: string; account_number: string;
   start_date: string; department: string; job_category: string;
   employment_type: string; shift_sched: string;
-  basic_salary: string; role: string;
+  basic_salary: string; role: RoleType;
 };
 
 export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Props) {
@@ -90,7 +92,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Props)
     employment_type:          employee?.employment_type ?? "probationary",
     shift_sched:              employee?.shift_sched ?? "morning",
     basic_salary:             employee?.basic_salary ? String(employee.basic_salary) : "",
-    role:                     employee?.role ?? "Employee",
+    role:                     (employee?.role as RoleType) ?? "Employee",
   });
 
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
@@ -98,13 +100,14 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Props)
   const set = (field: keyof FormData, value: string) =>
     setForm(prev => ({ ...prev, [field]: value }));
 
-  // FIX #4: auto-fill salary and role when job_category changes
+  // Auto-fill salary when job_category changes
   useEffect(() => {
     if (form.job_category && SALARY_MAP[form.job_category]) {
       set("basic_salary", String(SALARY_MAP[form.job_category]));
     }
   }, [form.job_category]);
 
+  // Auto-fill role when department and job_category change
   useEffect(() => {
     if (form.department && form.job_category) {
       set("role", determineRole(form.department, form.job_category));
@@ -131,10 +134,39 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Props)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
-    await onSubmit({
-      ...form,
+    
+    // Create properly typed EmployeeFormData
+    const formData: EmployeeFormData = {
+      first_name: form.first_name,
+      last_name: form.last_name,
+      middle_name: form.middle_name || undefined,
+      name_extension: form.name_extension || undefined,
+      date_of_birth: form.date_of_birth,
+      email: form.email,
+      phone_number: form.phone_number,
+      home_address: form.home_address,
+      emergency_contact_name: form.emergency_contact_name,
+      emergency_contact_number: form.emergency_contact_number,
+      relationship: form.relationship,
+      tin: form.tin || undefined,
+      sss_number: form.sss_number || undefined,
+      pagibig_number: form.pagibig_number || undefined,
+      philhealth_number: form.philhealth_number || undefined,
+      bank_name: form.bank_name || undefined,
+      account_name: form.account_name || undefined,
+      account_number: form.account_number || undefined,
+      start_date: form.start_date,
+      end_date: undefined,
+      department: form.department,
+      job_category: form.job_category,
+      employment_type: form.employment_type as Employee["employment_type"],
+      shift_sched: form.shift_sched as Employee["shift_sched"],
       basic_salary: parseFloat(form.basic_salary) || 0,
-    });
+      role: form.role,
+      manager_id: undefined,
+    };
+    
+    await onSubmit(formData);
   };
 
   const F = ({ label, field, required, type = "text", placeholder }: {
@@ -147,7 +179,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Props)
       <Input
         className={`mt-1 h-9 ${errors[field] ? "border-red-400" : ""}`}
         type={type}
-        value={form[field]}
+        value={form[field] as string}
         onChange={e => set(field, e.target.value)}
         placeholder={placeholder}
       />
@@ -201,7 +233,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Props)
               {errors.department && <p className="text-red-500 text-xs mt-0.5">{errors.department}</p>}
             </div>
 
-            {/* Job Category — FIX #4: updates salary on change */}
+            {/* Job Category — updates salary on change */}
             <div>
               <label className="text-xs font-medium text-foreground/80">
                 Job Category<span className="text-red-500 ml-0.5">*</span>
@@ -254,7 +286,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isLoading }: Props)
 
           <div className="grid grid-cols-2 gap-3">
             <F label="Start Date" field="start_date" required type="date" />
-            {/* FIX #4: read-only salary that auto-fills */}
+            {/* Salary - read-only that auto-fills */}
             <div>
               <label className="text-xs font-medium">Basic Salary (₱) — auto from category</label>
               <Input

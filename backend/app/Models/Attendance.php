@@ -263,8 +263,8 @@ class Attendance extends Model
             return '—';
         }
         
-        $hours = floor($this->hours_worked);
-        $minutes = round(($this->hours_worked - $hours) * 60);
+        $hours = floor((float) $this->hours_worked);
+        $minutes = round(((float) $this->hours_worked - $hours) * 60);
         
         if ($minutes > 0) {
             return "{$hours}h {$minutes}m";
@@ -282,8 +282,8 @@ class Attendance extends Model
             return '—';
         }
         
-        $hours = floor($this->minutes_late / 60);
-        $minutes = $this->minutes_late % 60;
+        $hours = floor((float) $this->minutes_late / 60);
+        $minutes = (int) ((float) $this->minutes_late % 60);
         
         if ($hours > 0) {
             return "{$hours}h {$minutes}m";
