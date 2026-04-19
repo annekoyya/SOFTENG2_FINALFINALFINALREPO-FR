@@ -17,12 +17,16 @@ return new class extends Migration
             // Track which step of onboarding is complete
             $table->enum('onboarding_status', [
                 'pending',      // Just created
-                'complete',     // All required fields filled — auto-transfers
+                'complete',     // All required fields filled
                 'transferred',  // Already moved to employees table
             ])->default('pending');
 
             // Link to the employee record once transferred
             $table->foreignId('employee_id')->nullable()->constrained('employees')->nullOnDelete();
+
+            // Recruitment links
+            $table->unsignedBigInteger('training_id')->nullable();
+            $table->unsignedBigInteger('applicant_id')->nullable();
 
             // ── Personal Info ─────────────────────────────────────────────
             $table->string('first_name');
@@ -60,6 +64,7 @@ return new class extends Migration
             $table->string('role')->default('Employee');
             $table->decimal('basic_salary', 12, 2)->nullable();
             $table->string('reporting_manager')->nullable();
+            $table->enum('shift_sched', ['morning', 'afternoon', 'night'])->default('morning')->nullable();
 
             // Tracks which required fields have been filled (JSON array of field names)
             $table->json('completed_fields')->nullable();

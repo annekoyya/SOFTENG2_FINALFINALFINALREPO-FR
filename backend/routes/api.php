@@ -75,14 +75,17 @@ Route::prefix('employees')->group(function () {
 });
 
 // ── New Hires ─────────────────────────────────────────────────────────────────
+// REPLACE with:
 Route::prefix('new-hires')->group(function () {
-    Route::get('/',    [NewHireController::class, 'index']);
-    Route::post('/',   [NewHireController::class, 'store']);
-    Route::get('/{id}',    [NewHireController::class, 'show']);
-    Route::put('/{id}',    [NewHireController::class, 'update']);
+    Route::get('/', [NewHireController::class, 'index']);
+    Route::post('/', [NewHireController::class, 'store']);
+    Route::get('/{id}', [NewHireController::class, 'show']);
+    Route::put('/{id}', [NewHireController::class, 'update']);
     Route::delete('/{id}', [NewHireController::class, 'destroy']);
-    Route::post('/{id}/transfer',        [RecruitmentController::class, 'transferToEmployee']);
-    Route::post('/{id}/complete-details', [RecruitmentController::class, 'completeNewHireDetails']);
+    Route::post('/{id}/complete-details', [NewHireController::class, 'completeDetails']);
+   // REPLACE with:
+Route::post('/{id}/complete-details', [NewHireController::class, 'completeDetails']);
+Route::post('/{id}/transfer', [NewHireController::class, 'transfer']);
 });
 
 // ── Recruitment ───────────────────────────────────────────────────────────────
@@ -290,7 +293,7 @@ Route::prefix('new-hires')->group(function () {
     Route::get('/{newHire}', [NewHireController::class, 'show']);
     Route::put('/{newHire}', [NewHireController::class, 'update']);
     Route::delete('/{newHire}', [NewHireController::class, 'destroy']);
-    Route::post('/{id}/transfer', [RecruitmentController::class, 'transferToEmployee']); // Add this line
+    Route::post('/{id}/transfer', [NewHireController::class, 'transfer']);
 });
 
     // ── Users ─────────────────────────────────────────────────────────────

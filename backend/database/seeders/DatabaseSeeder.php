@@ -17,12 +17,10 @@ class DatabaseSeeder extends Seeder
             EmployeeSeeder::class,        // Realistic employee records + matching user accounts
             NewHireSeeder::class,         // New hire onboarding records in various stages
             JobPostingSeeder::class,      // Job postings, applicants, interviews, job offers
-            AttendanceSeeder::class,      // Attendance records for past 30 days
-            LeaveRequestSeeder::class,    // Leave requests with various statuses
-            PayrollSeeder::class,         // Payroll periods and payslips
-            EvaluationSeeder::class,      // Performance evaluation forms and responses
-            TrainingSeeder::class,        // Training courses and assignments
-            DeductionCategorySeeder::class, // Deduction categories
+            // AttendanceSeeder::class,      // Attendance records for past 30 days
+            // PayrollSeeder::class,         // Payroll periods and payslips
+            // EvaluationSeeder::class,      // Performance evaluation forms and responses
+            // TrainingSeeder::class,        // Training courses and assignments
         ]);
     }
 }
