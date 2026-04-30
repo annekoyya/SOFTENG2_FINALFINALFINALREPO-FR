@@ -184,6 +184,8 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::prefix('leave-balances')->group(function () {
+        // Get balance summary for logged-in user
+Route::get('/leave-balances/summary', [LeaveController::class, 'getBalanceSummary']);
         Route::get('/',            [LeaveBalanceController::class, 'index']);
         Route::post('/adjust',     [LeaveBalanceController::class, 'adjust']);
         Route::post('/accrue',     [LeaveBalanceController::class, 'accrue']);

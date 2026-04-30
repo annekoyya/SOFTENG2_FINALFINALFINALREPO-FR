@@ -1,5 +1,4 @@
 // src/components/employees/NewHireDetailsModal.tsx
-// FIX #1: full form that SAVES details first, then transfers
 import { useState, useEffect } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -67,13 +66,13 @@ const DEPARTMENTS = [
 ];
 
 const JOB_CATEGORIES_BY_DEPT: Record<string, string[]> = {
-  "Front Office":    ["Front Desk Agent","Concierge","Reservations Agent","Guest Relations Officer","Bell Staff"],
-  "Housekeeping":    ["Room Attendant","Laundry Attendant","Housekeeping Supervisor","Public Area Cleaner"],
-  "Food & Beverage": ["Waiter/Waitress","Bartender","Chef de Partie","Sous Chef","Executive Chef","Kitchen Steward"],
-  "Maintenance":     ["Maintenance Technician","Electrician","Plumber","Maintenance Supervisor"],
-  "Administration":  ["HR Officer","Accounting Staff","Payroll Officer","General Manager","Department Manager","Supervisor"],
-  "Security":        ["Security Guard","Security Supervisor"],
-  "Sales & Marketing": ["Sales Manager","Marketing Officer","Reservations Manager"],
+  "Front Office":      ["Front Desk Agent", "Concierge", "Reservations Agent", "Guest Relations Officer", "Bell Staff"],
+  "Housekeeping":      ["Room Attendant", "Laundry Attendant", "Housekeeping Supervisor", "Public Area Cleaner"],
+  "Food & Beverage":   ["Waiter/Waitress", "Bartender", "Chef de Partie", "Sous Chef", "Executive Chef", "Kitchen Steward"],
+  "Maintenance":       ["Maintenance Technician", "Electrician", "Plumber", "Maintenance Supervisor"],
+  "Administration":    ["HR Officer", "Accounting Staff", "Payroll Officer", "General Manager", "Department Manager", "Supervisor"],
+  "Security":          ["Security Guard", "Security Supervisor"],
+  "Sales & Marketing": ["Sales Manager", "Marketing Officer", "Reservations Manager"],
 };
 
 function getPct(form: Form): number {
@@ -85,26 +84,52 @@ function getMissing(form: Form): (keyof Form)[] {
   return REQUIRED.filter(f => !form[f]);
 }
 
-export function NewHireDetailsModal({ open, onClose, newHireId, onSuccess }: Props) {
-  const { toast }                     = useToast();
-  const [form,     setForm]           = useState<Form>(EMPTY);
-  const [loading,  setLoading]        = useState(false);
-  const [fetching, setFetching]       = useState(false);
-  const [tab,      setTab]            = useState("personal");
+// ─── Field component defined OUTSIDE the modal so it never remounts on rerender
+interface FieldProps {
+  label: string;
+  field: keyof Form;
+  form: Form;
+  onChange: (field: keyof Form, value: string) => void;
+  required?: boolean;
+  type?: string;
+  placeholder?: string;
+}
 
-  const set = (field: keyof Form, value: string) =>
+function Field({ label, field, form, onChange, required, type = "text", placeholder }: FieldProps) {
+  return (
+    <div>
+      <label className="text-xs font-medium text-foreground/80">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      <Input
+        className={cn("mt-1 h-9", required && !form[field] ? "border-amber-300" : "")}
+        type={type}
+        value={form[field]}
+        onChange={e => onChange(field, e.target.value)}
+        placeholder={placeholder}
+      />
+    </div>
+  );
+}
+
+export function NewHireDetailsModal({ open, onClose, newHireId, onSuccess }: Props) {
+  const { toast }               = useToast();
+  const [form, setForm]         = useState<Form>(EMPTY);
+  const [loading, setLoading]   = useState(false);
+  const [fetching, setFetching] = useState(false);
+  const [tab, setTab]           = useState("personal");
+
+  const handleChange = (field: keyof Form, value: string) =>
     setForm(prev => ({ ...prev, [field]: value }));
 
-  const pct     = getPct(form);
-  const missing = getMissing(form);
+  const pct         = getPct(form);
+  const missing     = getMissing(form);
   const canTransfer = pct === 100;
 
-  // Load existing new hire data
   useEffect(() => {
     if (!open || !newHireId) return;
     setFetching(true);
     setTab("personal");
-
     authFetch(`/api/new-hires/${newHireId}`)
       .then(r => r.json())
       .then(body => {
@@ -147,50 +172,26 @@ export function NewHireDetailsModal({ open, onClose, newHireId, onSuccess }: Pro
     if (!canTransfer || !newHireId) return;
     setLoading(true);
     try {
-      // Step 1: save all details
-      const saveRes = await authFetch(`/api/new-hires/${newHireId}/complete-details`, {
+      const saveRes  = await authFetch(`/api/new-hires/${newHireId}/complete-details`, {
         method: "POST",
         body: JSON.stringify({ ...form, basic_salary: parseFloat(form.basic_salary) }),
       });
       const saveBody = await saveRes.json();
       if (!saveRes.ok) throw new Error(saveBody.message ?? "Failed to save details");
 
-      // Step 2: transfer to employee
       const txRes  = await authFetch(`/api/new-hires/${newHireId}/transfer`, { method: "POST" });
       const txBody = await txRes.json();
       if (!txRes.ok) throw new Error(txBody.message ?? "Transfer failed");
 
-      toast({
-        title: "🎉 Transferred!",
-        description: `${form.first_name} ${form.last_name} is now an active employee.`,
-      });
+      toast({ title: "🎉 Transferred!", description: `${form.first_name} ${form.last_name} is now an active employee.` });
       onSuccess();
       onClose();
     } catch (e) {
-      toast({
-        title: "Transfer failed",
-        description: e instanceof Error ? e.message : "Unknown error",
-        variant: "destructive",
-      });
-    } finally { setLoading(false); }
+      toast({ title: "Transfer failed", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
-
-  const F = ({ label, field, required, type = "text", placeholder }: {
-    label: string; field: keyof Form; required?: boolean; type?: string; placeholder?: string;
-  }) => (
-    <div>
-      <label className="text-xs font-medium text-foreground/80">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
-      </label>
-      <Input
-        className={cn("mt-1 h-9", required && !form[field] ? "border-amber-300" : "")}
-        type={type}
-        value={form[field]}
-        onChange={e => set(field, e.target.value)}
-        placeholder={placeholder}
-      />
-    </div>
-  );
 
   return (
     <Dialog open={open} onOpenChange={v => !loading && !v && onClose()}>
@@ -217,10 +218,7 @@ export function NewHireDetailsModal({ open, onClose, newHireId, onSuccess }: Pro
                   {pct}% ({REQUIRED.length - missing.length}/{REQUIRED.length} required)
                 </span>
               </div>
-              <Progress
-                value={pct}
-                className={cn("h-2.5", pct === 100 ? "[&>div]:bg-green-500" : "[&>div]:bg-amber-500")}
-              />
+              <Progress value={pct} className={cn("h-2.5", pct === 100 ? "[&>div]:bg-green-500" : "[&>div]:bg-amber-500")} />
               {pct < 100 && (
                 <div className="flex flex-wrap gap-1 mt-1">
                   {missing.map(f => (
@@ -238,7 +236,6 @@ export function NewHireDetailsModal({ open, onClose, newHireId, onSuccess }: Pro
               )}
             </div>
 
-            {/* Tabs */}
             <Tabs value={tab} onValueChange={setTab}>
               <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="personal">Personal</TabsTrigger>
@@ -247,38 +244,36 @@ export function NewHireDetailsModal({ open, onClose, newHireId, onSuccess }: Pro
                 <TabsTrigger value="banking">Banking</TabsTrigger>
               </TabsList>
 
-              {/* Personal */}
               <TabsContent value="personal" className="rounded-xl border p-5 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
-                  <F label="First Name"    field="first_name" required />
-                  <F label="Last Name"     field="last_name"  required />
+                  <Field label="First Name" field="first_name" form={form} onChange={handleChange} required />
+                  <Field label="Last Name"  field="last_name"  form={form} onChange={handleChange} required />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <F label="Middle Name"    field="middle_name" />
-                  <F label="Name Extension" field="name_extension" placeholder="Jr., Sr., III" />
+                  <Field label="Middle Name"    field="middle_name"    form={form} onChange={handleChange} />
+                  <Field label="Name Extension" field="name_extension" form={form} onChange={handleChange} placeholder="Jr., Sr., III" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <F label="Date of Birth" field="date_of_birth" required type="date" />
-                  <F label="Email"         field="email"         required type="email" />
+                  <Field label="Date of Birth" field="date_of_birth" form={form} onChange={handleChange} required type="date" />
+                  <Field label="Email"         field="email"         form={form} onChange={handleChange} required type="email" />
                 </div>
-                <F label="Phone Number" field="phone_number" required placeholder="+63 9XX XXX XXXX" />
-                <F label="Home Address" field="home_address" required />
+                <Field label="Phone Number" field="phone_number" form={form} onChange={handleChange} required placeholder="+63 9XX XXX XXXX" />
+                <Field label="Home Address" field="home_address" form={form} onChange={handleChange} required />
                 <div className="pt-2 border-t border-border">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Emergency Contact</p>
                   <div className="grid grid-cols-3 gap-3">
-                    <F label="Contact Name"   field="emergency_contact_name"   required />
-                    <F label="Contact Number" field="emergency_contact_number" required />
-                    <F label="Relationship"   field="relationship"             required placeholder="Spouse, Parent…" />
+                    <Field label="Contact Name"   field="emergency_contact_name"   form={form} onChange={handleChange} required />
+                    <Field label="Contact Number" field="emergency_contact_number" form={form} onChange={handleChange} required />
+                    <Field label="Relationship"   field="relationship"             form={form} onChange={handleChange} required placeholder="Spouse, Parent…" />
                   </div>
                 </div>
               </TabsContent>
 
-              {/* Employment */}
               <TabsContent value="employment" className="rounded-xl border p-5 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-medium">Department<span className="text-red-500 ml-0.5">*</span></label>
-                    <Select value={form.department} onValueChange={v => { set("department", v); set("job_category", ""); }}>
+                    <Select value={form.department} onValueChange={v => { handleChange("department", v); handleChange("job_category", ""); }}>
                       <SelectTrigger className={cn("mt-1 h-9", !form.department ? "border-amber-300" : "")}>
                         <SelectValue placeholder="Select department" />
                       </SelectTrigger>
@@ -287,7 +282,7 @@ export function NewHireDetailsModal({ open, onClose, newHireId, onSuccess }: Pro
                   </div>
                   <div>
                     <label className="text-xs font-medium">Job Category<span className="text-red-500 ml-0.5">*</span></label>
-                    <Select value={form.job_category} onValueChange={v => set("job_category", v)} disabled={!form.department}>
+                    <Select value={form.job_category} onValueChange={v => handleChange("job_category", v)} disabled={!form.department}>
                       <SelectTrigger className={cn("mt-1 h-9", !form.job_category ? "border-amber-300" : "")}>
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
@@ -302,7 +297,7 @@ export function NewHireDetailsModal({ open, onClose, newHireId, onSuccess }: Pro
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-medium">Shift<span className="text-red-500 ml-0.5">*</span></label>
-                    <Select value={form.shift_sched} onValueChange={v => set("shift_sched", v)}>
+                    <Select value={form.shift_sched} onValueChange={v => handleChange("shift_sched", v)}>
                       <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="morning">Morning (07:00–15:00)</SelectItem>
@@ -313,7 +308,7 @@ export function NewHireDetailsModal({ open, onClose, newHireId, onSuccess }: Pro
                   </div>
                   <div>
                     <label className="text-xs font-medium">Employment Type</label>
-                    <Select value={form.employment_type} onValueChange={v => set("employment_type", v)}>
+                    <Select value={form.employment_type} onValueChange={v => handleChange("employment_type", v)}>
                       <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="regular">Regular</SelectItem>
@@ -326,14 +321,14 @@ export function NewHireDetailsModal({ open, onClose, newHireId, onSuccess }: Pro
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <F label="Start Date" field="start_date" required type="date" />
+                  <Field label="Start Date" field="start_date" form={form} onChange={handleChange} required type="date" />
                   <div>
                     <label className="text-xs font-medium">Basic Salary (₱)<span className="text-red-500 ml-0.5">*</span></label>
                     <Input
                       type="number"
                       className={cn("mt-1 h-9", !form.basic_salary ? "border-amber-300" : "")}
                       value={form.basic_salary}
-                      onChange={e => set("basic_salary", e.target.value)}
+                      onChange={e => handleChange("basic_salary", e.target.value)}
                       placeholder="e.g. 25000"
                     />
                   </div>
@@ -341,7 +336,7 @@ export function NewHireDetailsModal({ open, onClose, newHireId, onSuccess }: Pro
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-medium">System Role</label>
-                    <Select value={form.role} onValueChange={v => set("role", v)}>
+                    <Select value={form.role} onValueChange={v => handleChange("role", v)}>
                       <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Employee">Employee</SelectItem>
@@ -352,31 +347,29 @@ export function NewHireDetailsModal({ open, onClose, newHireId, onSuccess }: Pro
                       </SelectContent>
                     </Select>
                   </div>
-                  <F label="Reporting Manager" field="reporting_manager" placeholder="Direct supervisor name" />
+                  <Field label="Reporting Manager" field="reporting_manager" form={form} onChange={handleChange} placeholder="Direct supervisor name" />
                 </div>
                 <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-xs text-blue-800">
-                  Login will be created: <strong>{form.email || "—"}</strong> / temp password: <strong>Employee@123</strong>
+                  Login: <strong>{form.email || "—"}</strong> / password: <strong>Employee@123</strong>
                 </div>
               </TabsContent>
 
-              {/* Gov IDs */}
               <TabsContent value="govids" className="rounded-xl border p-5 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
-                  <F label="TIN"        field="tin"              placeholder="Tax Identification Number" />
-                  <F label="SSS Number" field="sss_number"       />
-                  <F label="PhilHealth" field="philhealth_number" />
-                  <F label="Pag-IBIG"   field="pagibig_number"   />
+                  <Field label="TIN"        field="tin"               form={form} onChange={handleChange} placeholder="Tax Identification Number" />
+                  <Field label="SSS Number" field="sss_number"        form={form} onChange={handleChange} />
+                  <Field label="PhilHealth" field="philhealth_number" form={form} onChange={handleChange} />
+                  <Field label="Pag-IBIG"   field="pagibig_number"    form={form} onChange={handleChange} />
                 </div>
                 <p className="text-xs text-muted-foreground">Optional now, required for payroll later.</p>
               </TabsContent>
 
-              {/* Banking */}
               <TabsContent value="banking" className="rounded-xl border p-5 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
-                  <F label="Bank Name"    field="bank_name"    placeholder="BDO, BPI, Metrobank…" />
-                  <F label="Account Name" field="account_name" />
+                  <Field label="Bank Name"    field="bank_name"    form={form} onChange={handleChange} placeholder="BDO, BPI, Metrobank…" />
+                  <Field label="Account Name" field="account_name" form={form} onChange={handleChange} />
                 </div>
-                <F label="Account Number" field="account_number" />
+                <Field label="Account Number" field="account_number" form={form} onChange={handleChange} />
                 <p className="text-xs text-muted-foreground">Required for payroll disbursement.</p>
               </TabsContent>
             </Tabs>
@@ -388,10 +381,7 @@ export function NewHireDetailsModal({ open, onClose, newHireId, onSuccess }: Pro
           <Button
             onClick={handleTransfer}
             disabled={!canTransfer || loading || fetching}
-            className={cn(
-              "gap-2 min-w-[160px]",
-              canTransfer ? "bg-green-600 hover:bg-green-700 text-white" : "opacity-60"
-            )}
+            className={cn("gap-2 min-w-[160px]", canTransfer ? "bg-green-600 hover:bg-green-700 text-white" : "opacity-60")}
           >
             {loading
               ? <><Loader2 className="h-4 w-4 animate-spin" /> Transferring…</>

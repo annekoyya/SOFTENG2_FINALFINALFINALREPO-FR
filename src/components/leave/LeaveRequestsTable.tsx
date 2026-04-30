@@ -36,6 +36,26 @@ function formatDate(d: string) {
   return new Date(d).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
 }
 
+function formatDateTime(d: string | null | undefined) {
+  if (!d) return "";
+  return new Date(d).toLocaleDateString("en-PH", { 
+    month: "short", 
+    day: "numeric", 
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+// Helper to safely get approval date from various possible field names
+function getApprovalDate(req: LeaveRequest): string | null {
+  return (req as any).approved_at || 
+         (req as any).approval_date || 
+         (req as any).processed_at || 
+         (req as any).approved_on ||
+         null;
+}
+
 // ── Reject dialog ─────────────────────────────────────────────────────────────
 
 function RejectDialog({
@@ -51,7 +71,8 @@ function RejectDialog({
 
   const handleReject = async () => {
     if (!reason.trim()) {
-      toast({ title: "Please provide a reason.", variant: "destructive" }); return;
+      toast({ title: "Please provide a reason.", variant: "destructive" });
+      return;
     }
     setLoading(true);
     try {
@@ -91,12 +112,11 @@ function RejectDialog({
 interface LeaveRequestsTableProps {
   requests: LeaveRequest[];
   isLoading: boolean;
-  canManage: boolean;   // HR / Manager / Admin
+  canManage: boolean;
   onApprove: (id: number) => Promise<void>;
   onReject: (id: number, reason: string) => Promise<void>;
   onCancel: (id: number) => Promise<void>;
   onRefresh: () => void;
-  /** Pass current employee id to highlight own requests */
   currentEmployeeId?: number;
 }
 
@@ -216,6 +236,7 @@ export default function LeaveRequestsTable({
                 const requiresProof = LEAVE_POLICIES.find(
                   (p) => p.leave_type === req.leave_type
                 )?.requires_proof;
+                const approvalDate = getApprovalDate(req);
 
                 return (
                   <TableRow
@@ -298,7 +319,7 @@ export default function LeaveRequestsTable({
                       )}
                       {req.status === "approved" && (
                         <span className="text-xs text-muted-foreground">
-                          {req.approved_by_name ? `By ${req.approved_by_name}` : "Approved"}
+                          {approvalDate ? formatDateTime(approvalDate) : "Approved"}
                         </span>
                       )}
                     </TableCell>

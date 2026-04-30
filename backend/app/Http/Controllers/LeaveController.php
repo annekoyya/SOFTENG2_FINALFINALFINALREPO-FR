@@ -21,8 +21,17 @@ class LeaveController extends Controller
     // ─── GET /api/leave-requests ──────────────────────────────────────────────
     public function index(Request $request): JsonResponse
     {
+        $user = Auth::user();
         $query = LeaveRequest::with(['employee:id,first_name,last_name,department'])
             ->orderBy('created_at', 'desc');
+
+        // If not admin, only show their own requests
+        if (!in_array($user->role, ['Admin', 'HR Manager'])) {
+            $employee = Employee::where('email', $user->email)->first();
+            if ($employee) {
+                $query->where('employee_id', $employee->id);
+            }
+        }
 
         if ($request->filled('employee_id')) $query->where('employee_id', $request->employee_id);
         if ($request->filled('status'))      $query->where('status',      $request->status);
@@ -41,13 +50,100 @@ class LeaveController extends Controller
             'status'          => $r->status,
             'rejected_reason' => $r->rejected_reason ?? $r->approval_reason ?? null,
             'created_at'      => $r->created_at?->toDateTimeString(),
+            'approved_at'     => $r->approved_at?->toDateTimeString(),
         ]);
 
         return response()->json(['success' => true, 'data' => $requests]);
     }
 
+    // ─── GET /api/leave-balances ──────────────────────────────────────────────
+    // FIX #2: Only return balances for the logged-in user
+    // ─── GET /api/leave-balances ──────────────────────────────────────────────
+public function balances(Request $request): JsonResponse
+{
+    $user = Auth::user();
+    $year = $request->input('year', now()->year);
+    
+    // Get the employee linked to the current user
+    $employee = Employee::where('email', $user->email)->first();
+    
+    if (!$employee) {
+        return response()->json([
+            'success' => true, 
+            'data' => []
+        ]);
+    }
+    
+    // IMPORTANT: Filter by employee_id - only show current user's balances
+    $query = LeaveBalance::where('employee_id', $employee->id)
+        ->where('year', $year);
+    
+    // Optional: Add employee relation for name
+    $query->with('employee:id,first_name,last_name');
+    
+    $balances = $query->get()->map(fn($b) => [
+        'id'             => $b->id,
+        'employee_id'    => $b->employee_id,
+        'employee_name'  => $b->employee ? trim("{$b->employee->first_name} {$b->employee->last_name}") : null,
+        'leave_type'     => $b->leave_type,
+        'entitled_days'  => (float) $b->entitled_days,
+        'used_days'      => (float) $b->used_days,
+        'carried_over'   => (float) $b->carried_over,
+        'pending_days'   => (float) ($b->pending_days ?? 0),
+        'remaining_days' => max(0, (float) $b->entitled_days + (float) $b->carried_over - (float) $b->used_days),
+        'year'           => (int) $b->year,
+    ]);
+
+    return response()->json(['success' => true, 'data' => $balances]);
+}
+
+    // ─── GET /api/leave-balances/summary ──────────────────────────────────────
+    // Get formatted summary for dashboard
+    public function getBalanceSummary(): JsonResponse
+    {
+        $user = Auth::user();
+        $employee = Employee::where('email', $user->email)->first();
+        
+        if (!$employee) {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'vacation' => ['remaining' => 0, 'used' => 0, 'total' => 0],
+                    'sick' => ['remaining' => 0, 'used' => 0, 'total' => 0],
+                    'emergency' => ['remaining' => 0, 'used' => 0, 'total' => 0],
+                ]
+            ]);
+        }
+        
+        $year = now()->year;
+        $balances = LeaveBalance::where('employee_id', $employee->id)
+            ->where('year', $year)
+            ->get()
+            ->keyBy('leave_type');
+        
+        $summary = [];
+        $leaveTypes = ['vacation' => 0, 'sick' => 0, 'emergency' => 3];
+        
+        foreach ($leaveTypes as $type => $defaultTotal) {
+            $balance = $balances->get($type);
+            $entitled = (float) ($balance?->entitled_days ?? 0);
+            $carried = (float) ($balance?->carried_over ?? 0);
+            $used = (float) ($balance?->used_days ?? 0);
+            
+            $summary[$type] = [
+                'total' => $entitled + $carried,
+                'used' => $used,
+                'remaining' => max(0, $entitled + $carried - $used),
+            ];
+        }
+        
+        return response()->json([
+            'success' => true,
+            'data' => $summary
+        ]);
+    }
+
     // ─── POST /api/leave-requests ─────────────────────────────────────────────
-    // FIX #9: HR can create (employee_id param); Admin approves
     public function store(Request $request): JsonResponse
     {
         $v = $request->validate([
@@ -62,12 +158,11 @@ class LeaveController extends Controller
         $employeeId = $v['employee_id'] ?? null;
 
         if (!$employeeId) {
-            // Find the employee record linked to the current user's email
             $emp = Employee::where('email', $user->email)->first();
             if (!$emp) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No employee record linked to your account. Please provide an employee_id.',
+                    'message' => 'No employee record linked to your account.',
                 ], 422);
             }
             $employeeId = $emp->id;
@@ -103,7 +198,6 @@ class LeaveController extends Controller
             'status'      => 'pending',
         ];
 
-        // Support both column naming conventions
         try {
             $req = LeaveRequest::create(array_merge($base, ['days_requested' => $days]));
         } catch (\Throwable) {
@@ -117,10 +211,8 @@ class LeaveController extends Controller
     }
 
     // ─── POST /api/leave-requests/{id}/approve ────────────────────────────────
-    // FIX #9: Only Admin can approve
     public function approve(int $id): JsonResponse
     {
-        // FIX #9: HR creates, Admin approves
         if (!in_array(Auth::user()->role, ['Admin'])) {
             return response()->json(['success' => false, 'message' => 'Only Admin can approve leave requests.'], 403);
         }
@@ -132,11 +224,13 @@ class LeaveController extends Controller
         }
 
         DB::transaction(function () use ($req) {
-            $days   = (float) ($req->days_requested ?? $req->number_of_days ?? 0);
-            $update = ['status' => 'approved', 'approved_at' => now()];
-            try { $update['approver_id'] = Auth::id(); } catch (\Throwable) {}
-            try { $update['approved_by'] = Auth::id(); } catch (\Throwable) {}
-            $req->update($update);
+            $days = (float) ($req->days_requested ?? $req->number_of_days ?? 0);
+            
+            // Remove the problematic columns - only update what exists
+            $req->update([
+                'status' => 'approved',
+                'approved_at' => now()
+            ]);
 
             // Deduct leave balance
             if ($req->leave_type !== 'unpaid' && $days > 0) {
@@ -168,24 +262,23 @@ class LeaveController extends Controller
     }
 
     // ─── POST /api/leave-requests/{id}/reject ─────────────────────────────────
-    // FIX #9: Only Admin can reject
     public function reject(Request $request, int $id): JsonResponse
     {
         if (!in_array(Auth::user()->role, ['Admin'])) {
             return response()->json(['success' => false, 'message' => 'Only Admin can reject leave requests.'], 403);
         }
 
-        $req  = LeaveRequest::findOrFail($id);
+        $req = LeaveRequest::findOrFail($id);
         $data = $request->validate(['reason' => 'required|string|max:300']);
 
         if ($req->status !== 'pending') {
             return response()->json(['success' => false, 'message' => 'Request is not pending.'], 422);
         }
 
-        $update = ['status' => 'rejected', 'rejected_reason' => $data['reason']];
-        try { $update['approver_id'] = Auth::id(); } catch (\Throwable) {}
-        try { $update['approved_by'] = Auth::id(); } catch (\Throwable) {}
-        $req->update($update);
+        $req->update([
+            'status' => 'rejected',
+            'rejected_reason' => $data['reason']
+        ]);
 
         return response()->json(['success' => true, 'message' => 'Leave rejected.']);
     }
@@ -199,28 +292,6 @@ class LeaveController extends Controller
         }
         $req->update(['status' => 'cancelled']);
         return response()->json(['success' => true]);
-    }
-
-    // ─── GET /api/leave-balances ──────────────────────────────────────────────
-    public function balances(Request $request): JsonResponse
-    {
-        $year  = $request->input('year', now()->year);
-        $query = LeaveBalance::with('employee:id,first_name,last_name');
-        if ($request->filled('employee_id')) $query->where('employee_id', $request->employee_id);
-        $query->where('year', $year);
-
-        $balances = $query->get()->map(fn($b) => [
-            'id'             => $b->id,
-            'employee_id'    => $b->employee_id,
-            'leave_type'     => $b->leave_type,
-            'entitled_days'  => (float) $b->entitled_days,
-            'used_days'      => (float) $b->used_days,
-            'carried_over'   => (float) $b->carried_over,
-            'remaining_days' => max(0, (float) $b->entitled_days + (float) $b->carried_over - (float) $b->used_days),
-            'year'           => (int) $b->year,
-        ]);
-
-        return response()->json(['success' => true, 'data' => $balances]);
     }
 
     // ─── POST /api/leave-balances/seed ────────────────────────────────────────
@@ -242,7 +313,7 @@ class LeaveController extends Controller
                 foreach (['vacation', 'sick'] as $type) {
                     LeaveBalance::firstOrCreate(
                         ['employee_id' => $emp->id, 'leave_type' => $type, 'year' => $year],
-                        ['entitled_days' => 0, 'used_days' => 0, 'carried_over' => 0]
+                        ['entitled_days' => 5, 'used_days' => 0, 'carried_over' => 0]
                     ); $created++;
                 }
             }
@@ -262,7 +333,8 @@ class LeaveController extends Controller
                         ['employee_id' => $emp->id, 'leave_type' => $type, 'year' => $year],
                         ['entitled_days' => 0]
                     );
-                    $b->update(['entitled_days' => min(15.0, (float) $b->entitled_days + 1.25)]);
+                    $newEntitlement = min(15.0, (float) $b->entitled_days + 1.25);
+                    $b->update(['entitled_days' => $newEntitlement]);
                     $updated++;
                 }
             });

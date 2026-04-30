@@ -5,7 +5,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Separator } from "@/components/ui/separator";
 import { Pencil, Archive, Download, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { Employee } from "@/app/types/employee";
+import type { Employee } from "@/types/employee";
+
 interface Props {
   employee: Employee | null;
   open: boolean;
@@ -16,10 +17,11 @@ interface Props {
 }
 
 const statusColors: Record<string, string> = {
-  active:     "bg-green-100 text-green-700",
-  on_leave:   "bg-yellow-100 text-yellow-700",
-  suspended:  "bg-orange-100 text-orange-700",
-  terminated: "bg-red-100 text-red-700",
+  active:      "bg-green-100 text-green-700",
+  on_leave:    "bg-yellow-100 text-yellow-700",
+  suspended:   "bg-orange-100 text-orange-700",
+  terminated:  "bg-red-100 text-red-700",
+  onboarding:  "bg-blue-100 text-blue-700",
 };
 
 const roleColors: Record<string, string> = {
@@ -54,14 +56,28 @@ export function EmployeeDetails({ employee, open, onClose, onEdit, onArchive, is
   if (!employee) return null;
 
   const fullName = [employee.first_name, employee.middle_name, employee.last_name, employee.name_extension]
-    .filter(Boolean).join(" ");
+    .filter(Boolean).join(" ") || "—";
+
+  const initials = `${employee.first_name?.[0] ?? ""}${employee.last_name?.[0] ?? ""}` || "?";
+
+  const shiftLabel = employee.shift_sched
+    ? `${employee.shift_sched.charAt(0).toUpperCase() + employee.shift_sched.slice(1)} shift`
+    : "—";
+
+  const employmentTypeLabel = employee.employment_type
+    ? employee.employment_type.replace("_", " ")
+    : "—";
+
+  const statusLabel = employee.status
+    ? employee.status.replace("_", " ")
+    : "—";
 
   const handleExport = () => {
     const blob = new Blob([JSON.stringify(employee, null, 2)], { type: "application/json" });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
     a.href     = url;
-    a.download = `employee_${employee.id}_${employee.last_name}.json`;
+    a.download = `employee_${employee.id}_${employee.last_name ?? "export"}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -76,18 +92,22 @@ export function EmployeeDetails({ employee, open, onClose, onEdit, onArchive, is
         {/* Hero */}
         <div className="flex items-center gap-4 mb-6">
           <div className="h-16 w-16 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-xl shrink-0">
-            {employee.first_name[0]}{employee.last_name[0]}
+            {initials}
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-lg font-semibold text-foreground truncate">{fullName}</h2>
-            <p className="text-sm text-muted-foreground">{employee.job_category} · {employee.department}</p>
+            <p className="text-sm text-muted-foreground">
+              {employee.job_category ?? "—"} · {employee.department ?? "—"}
+            </p>
             <div className="flex items-center gap-2 mt-1">
-              <Badge className={cn("text-xs border-0 capitalize", statusColors[employee.status])}>
-                {employee.status.replace("_", " ")}
+              <Badge className={cn("text-xs border-0 capitalize", statusColors[employee.status] ?? "bg-gray-100 text-gray-600")}>
+                {statusLabel}
               </Badge>
-              <Badge className={cn("text-xs border-0", roleColors[employee.role])}>
-                <Shield className="h-3 w-3 mr-1" />{employee.role}
-              </Badge>
+              {employee.role && (
+                <Badge className={cn("text-xs border-0", roleColors[employee.role] ?? "bg-gray-100 text-gray-600")}>
+                  <Shield className="h-3 w-3 mr-1" />{employee.role}
+                </Badge>
+              )}
             </div>
           </div>
         </div>
@@ -113,23 +133,25 @@ export function EmployeeDetails({ employee, open, onClose, onEdit, onArchive, is
 
         <div className="space-y-6">
           <Section title="Personal Information">
-            <Row label="Full Name"      value={fullName} />
-            <Row label="Date of Birth"  value={employee.date_of_birth} />
-            <Row label="Email"          value={employee.email} />
-            <Row label="Phone Number"   value={employee.phone_number} />
-            <Row label="Home Address"   value={employee.home_address} />
+            <Row label="Full Name"     value={fullName} />
+            <Row label="Date of Birth" value={employee.date_of_birth} />
+            <Row label="Email"         value={employee.email} />
+            <Row label="Phone Number"  value={employee.phone_number} />
+            <Row label="Home Address"  value={employee.home_address} />
           </Section>
 
           <Separator />
 
           <Section title="Employment">
-            <Row label="Employee ID"      value={`#${String(employee.id).padStart(5, "0")}`} />
-            <Row label="Department"       value={employee.department} />
-            <Row label="Job Category"     value={employee.job_category} />
-            <Row label="Employment Type"  value={employee.employment_type.replace("_", " ")} />
-            <Row label="Shift Schedule"   value={`${employee.shift_sched.charAt(0).toUpperCase() + employee.shift_sched.slice(1)} shift`} />
-            <Row label="Start Date"       value={employee.start_date} />
-            <Row label="Basic Salary"     value={`₱${Number(employee.basic_salary).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`} />
+            <Row label="Employee ID"     value={`#${String(employee.id).padStart(5, "0")}`} />
+            <Row label="Department"      value={employee.department} />
+            <Row label="Job Category"    value={employee.job_category} />
+            <Row label="Employment Type" value={employmentTypeLabel} />
+            <Row label="Shift Schedule"  value={shiftLabel} />
+            <Row label="Start Date"      value={employee.start_date} />
+            <Row label="Basic Salary"    value={employee.basic_salary != null
+              ? `₱${Number(employee.basic_salary).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
+              : "—"} />
           </Section>
 
           <Separator />
@@ -143,18 +165,18 @@ export function EmployeeDetails({ employee, open, onClose, onEdit, onArchive, is
           <Separator />
 
           <Section title="Government IDs">
-            <Row label="TIN"            value={employee.tin} />
-            <Row label="SSS Number"     value={employee.sss_number} />
-            <Row label="Pag-IBIG"       value={employee.pagibig_number} />
-            <Row label="PhilHealth"     value={employee.philhealth_number} />
+            <Row label="TIN"       value={employee.tin} />
+            <Row label="SSS"       value={employee.sss_number} />
+            <Row label="Pag-IBIG"  value={employee.pagibig_number} />
+            <Row label="PhilHealth" value={employee.philhealth_number} />
           </Section>
 
           <Separator />
 
           <Section title="Banking">
-            <Row label="Bank Name"       value={employee.bank_name} />
-            <Row label="Account Name"    value={employee.account_name} />
-            <Row label="Account Number"  value={employee.account_number} />
+            <Row label="Bank Name"      value={employee.bank_name} />
+            <Row label="Account Name"   value={employee.account_name} />
+            <Row label="Account Number" value={employee.account_number} />
           </Section>
         </div>
       </SheetContent>
