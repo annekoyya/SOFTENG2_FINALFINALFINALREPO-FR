@@ -236,10 +236,11 @@ class RecruitmentController extends Controller
     }
 
     // FIX #17: return only HR users for interviewer selection
-    public function getInterviewers(): JsonResponse
+public function getInterviewers(): JsonResponse
     {
-        $hrs = User::where('role', 'HR')->get(['id', 'name', 'email']);
-        return response()->json(['success' => true, 'data' => $hrs]);
+        $interviewers = User::whereIn('role', ['HR', 'Manager'])
+            ->get(['id', 'name', 'email']);
+        return response()->json(['success' => true, 'data' => $interviewers]);
     }
 
     public function scheduleInterview(Request $request): JsonResponse

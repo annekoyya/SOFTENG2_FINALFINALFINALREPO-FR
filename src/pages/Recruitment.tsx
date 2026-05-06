@@ -364,45 +364,28 @@ function ApplicantManagementTab({ canManage }: { canManage: boolean }) {
   };
 
   // Fetch HR users from employees endpoint
-  const fetchHrUsers = async () => {
-    try {
-      const res = await authFetch("/api/employees");
-      const body = await res.json();
-      const employees = body.data?.data || body.data || [];
-      
-      // Filter employees with HR role
-      const hrEmployees = employees.filter((e: any) => e.role === 'HR');
-      
-      const hrUserList = hrEmployees.map((e: any) => ({
-        id: e.id,
-        name: `${e.first_name} ${e.last_name}`,
-        email: e.email
-      }));
-      
-      console.log("HR Users found:", hrUserList);
-      setHrUsers(hrUserList);
-      
-      // If no HR users found, add fallback for testing
-      if (hrUserList.length === 0) {
-        console.warn("No HR users found, using fallback");
-        setHrUsers([
-          { id: 2, name: "HR Officer", email: "hr@hrharmony.com" },
-          { id: 7, name: "Ana Reyes", email: "ana.reyes@bluelotus.com" },
-        ]);
-      }
-    } catch (error) {
-      console.error("Failed to fetch HR users:", error);
-      // Fallback HR users
-      setHrUsers([
-        { id: 2, name: "HR Officer", email: "hr@hrharmony.com" },
-        { id: 7, name: "Ana Reyes", email: "ana.reyes@bluelotus.com" },
-      ]);
+const fetchInterviewers = async () => {
+  try {
+    const res = await authFetch("/api/recruitment/interviewers");
+    const data = await res.json();
+    if (data.success) {
+      setHrUsers(data.data);
+    } else {
+      // fallback: fetch employees and filter HR/Manager
+      const empRes = await authFetch("/api/employees");
+      const empData = await empRes.json();
+      const employees = empData.data?.data || empData.data || [];
+      const eligible = employees.filter((e: any) => e.role === 'HR' || e.role === 'Manager');
+      setHrUsers(eligible.map((e: any) => ({ id: e.id, name: `${e.first_name} ${e.last_name}`, email: e.email })));
     }
-  };
+  } catch {
+    setHrUsers([]);
+  }
+};
 
   useEffect(() => { 
     load(); 
-    fetchHrUsers();
+    fetchInterviewers();
   }, []);
 
   const addApplicant = async () => {
